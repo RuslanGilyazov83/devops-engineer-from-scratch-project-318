@@ -10,6 +10,10 @@ app_management_port: 9090
 # Docker-сеть — общая для приложения и БД
 docker_network: bulletins-net
 
+# Node Exporter
+node_exporter_version: "1.10.0"
+node_exporter_port: 9100
+
 # Секреты задаются через ansible-vault (ansible/group_vars/vault.yml)
 # postgres_db: appdb
 # postgres_user: appuser

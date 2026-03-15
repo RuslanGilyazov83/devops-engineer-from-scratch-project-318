@@ -1,0 +1,35 @@
+---
+- name: Установить Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+
+- name: Убедиться что директория логов существует
+  ansible.builtin.file:
+    path: /var/log/nginx
+    state: directory
+    owner: www-data
+    group: adm
+    mode: '0755'
+
+- name: Развернуть конфиг виртуального хоста
+  ansible.builtin.template:
+    src: app.conf.j2
+    dest: /etc/nginx/conf.d/app.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Перезагрузить Nginx
+
+- name: Удалить дефолтный конфиг Nginx
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Перезагрузить Nginx
+
+- name: Включить и запустить Nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: true

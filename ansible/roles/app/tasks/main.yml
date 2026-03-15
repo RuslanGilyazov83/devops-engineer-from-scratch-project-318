@@ -17,8 +17,9 @@
     state: started
     recreate: true
     published_ports:
-      - "{{ app_port }}:8080"
-      - "{{ app_management_port }}:9090"
+      - "0.0.0.0:{{ app_port }}:8080"
+      # management порт — только localhost, Nginx проксирует снаружи
+      - "127.0.0.1:{{ app_management_port }}:9090"
     networks:
       - name: "{{ docker_network }}"
     env:

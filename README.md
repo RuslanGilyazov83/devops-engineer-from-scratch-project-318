@@ -11,18 +11,95 @@
 ## Адрес сервера
 
 ```
-http://158.160.223.121:8080
+http://158.160.223.121
 ```
 
-## Эндпоинты
+## Эндпоинты приложения
 
-| Путь | Описание |
-|------|----------|
-| `GET /api/bulletins` | Список объявлений |
-| `GET /swagger-ui/index.html` | Swagger UI |
-| `GET /actuator/health` | Проверка работоспособности (порт 9090) |
-| `GET /actuator/health/liveness` | Liveness проба |
-| `GET /actuator/health/readiness` | Readiness проба |
+| Путь | Порт | Описание |
+|------|------|----------|
+| `GET /api/bulletins` | 80 (Nginx) | Список объявлений |
+| `GET /swagger-ui/index.html` | 80 (Nginx) | Swagger UI |
+| `GET /actuator/health` | 80 (Nginx) | Состояние приложения (через Nginx) |
+| `GET /actuator/health/liveness` | 80 (Nginx) | Liveness проба |
+| `GET /actuator/health/readiness` | 80 (Nginx) | Readiness проба |
+| `GET /actuator/prometheus` | 80 (Nginx) | Метрики Prometheus (через Nginx) |
+
+> Management-порт `9090` доступен только с localhost — Nginx проксирует его наружу.
+
+## Метрики
+
+### Метрики хоста (Node Exporter, порт 9100)
+
+Node Exporter работает как systemd-сервис, слушает только на localhost:9100.
+Доступ открывается только с сервера мониторинга (Security Group).
+
+| Метрика | Описание |
+|---------|----------|
+| `node_load1` | Средняя нагрузка CPU за 1 минуту |
+| `node_load5` | Средняя нагрузка CPU за 5 минут |
+| `node_cpu_seconds_total` | Суммарное время CPU по режимам (user/system/idle) |
+| `node_memory_MemAvailable_bytes` | Доступная оперативная память |
+| `node_memory_MemTotal_bytes` | Всего оперативной памяти |
+| `node_filesystem_avail_bytes` | Свободное место на диске |
+| `node_filesystem_size_bytes` | Размер файловой системы |
+| `node_disk_read_bytes_total` | Прочитано байт с диска |
+| `node_disk_written_bytes_total` | Записано байт на диск |
+| `node_network_receive_bytes_total` | Получено байт по сети |
+| `node_network_transmit_bytes_total` | Отправлено байт по сети |
+| `node_procs_running` | Количество запущенных процессов |
+| `node_systemd_unit_state` | Состояние systemd-сервисов |
+
+### Метрики приложения (Spring Actuator / Micrometer)
+
+| Метрика | Описание |
+|---------|----------|
+| `process_uptime_seconds` | Время работы JVM-процесса |
+| `process_cpu_usage` | Использование CPU процессом |
+| `jvm_memory_used_bytes` | Используемая память JVM |
+| `jvm_memory_max_bytes` | Максимальная память JVM |
+| `jvm_gc_pause_seconds_count` | Количество пауз GC |
+| `http_server_requests_seconds_count` | Количество HTTP-запросов |
+| `http_server_requests_seconds_sum` | Суммарное время обработки запросов |
+| `hikaricp_connections_active` | Активных соединений с БД |
+| `hikaricp_connections_idle` | Свободных соединений в пуле |
+| `spring_data_repository_invocations_seconds_count` | Количество запросов к БД |
+
+## Команды проверки метрик
+
+```bash
+# Health приложения через Nginx
+curl http://158.160.223.121/actuator/health
+
+# Метрики Prometheus через Nginx
+curl http://158.160.223.121/actuator/prometheus
+
+# Health напрямую на management-порту (только с сервера)
+curl http://localhost:9090/actuator/health
+
+# Метрики Node Exporter (только с сервера)
+curl http://localhost:9100/metrics
+
+# Конкретные метрики Node Exporter
+curl -s http://localhost:9100/metrics | grep node_load1
+curl -s http://localhost:9100/metrics | grep node_memory_MemAvailable
+curl -s http://localhost:9100/metrics | grep node_filesystem_avail
+
+# Метрики приложения — HTTP-запросы
+curl -s http://158.160.223.121/actuator/prometheus | grep http_server_requests
+
+# Логи Nginx в JSON
+sudo tail -f /var/log/nginx/app-access.log
+```
+
+## Порты и доступность
+
+| Порт | Сервис | Доступность |
+|------|--------|-------------|
+| 80 | Nginx reverse proxy | Публично |
+| 8080 | Spring Boot app | Только localhost (через Nginx) |
+| 9090 | Spring Actuator (management) | Только localhost (через Nginx) |
+| 9100 | Node Exporter | Только сервер мониторинга |
 
 ## Быстрый старт (локально)
 
@@ -58,15 +135,18 @@ ruslangilyazov/project-devops-deploy:latest
 
 Все файлы находятся в директории [`ansible/`](ansible/).
 
-| Файл | Назначение |
-|------|------------|
+| Файл / Директория | Назначение |
+|-------------------|------------|
 | `ansible/setup.yml` | Установка Docker на сервер |
-| `ansible/deploy.yml` | Запуск PostgreSQL и приложения |
+| `ansible/deploy.yml` | Запуск всех сервисов (БД, приложение, Node Exporter, Nginx) |
 | `ansible/inventory/hosts.yml` | Список серверов |
-| `ansible/group_vars/all.yml` | Общие переменные |
-| `ansible/roles/docker/` | Роль — установка Docker |
-| `ansible/roles/db_postgres/` | Роль — запуск PostgreSQL в Docker |
-| `ansible/roles/app/` | Роль — запуск контейнера приложения |
+| `ansible/group_vars/all/vars.yml` | Общие переменные |
+| `ansible/group_vars/all/vault.yml` | Секретные переменные (зашифрованы) |
+| `ansible/roles/docker/` | Установка Docker |
+| `ansible/roles/db_postgres/` | PostgreSQL в Docker |
+| `ansible/roles/app/` | Контейнер приложения |
+| `ansible/roles/node_exporter/` | Node Exporter как systemd-сервис |
+| `ansible/roles/nginx_proxy/` | Nginx с JSON-логами и проброс actuator |
 
 ## Makefile-команды
 
@@ -91,10 +171,10 @@ make deploy        # Развернуть приложение
 # 1. Установить зависимости Ansible
 make ansible-deps
 
-# 2. Прописать IP сервера в ansible/inventory/hosts.yml
+# 2. Прописать IP сервера в ansible/inventory/hosts.yml (уже сделано)
 
-# 3. Создать файл с секретами
-ansible-vault create ansible/group_vars/vault.yml
+# 3. Создать файл с секретами (если ещё не создан)
+ansible-vault create ansible/group_vars/all/vault.yml
 
 # 4. Подготовить сервер
 make setup

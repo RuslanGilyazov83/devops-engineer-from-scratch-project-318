@@ -6,7 +6,7 @@ PLAYBOOK_DEPLOY = $(ANSIBLE_DIR)/deploy.yml
 IMAGE_NAME ?= ruslangilyazov/project-devops-deploy
 IMAGE_TAG  ?= dev
 
-.PHONY: help build test run docker-build docker-run ansible-deps setup deploy
+.PHONY: help build test run docker-build docker-run ansible-deps setup deploy check-metrics
 
 help: ## Показать список доступных команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -41,3 +41,14 @@ setup: ## Подготовить сервер: установить Docker
 
 deploy: ## Развернуть приложение на сервере
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DEPLOY) --ask-vault-pass
+
+# ─── Проверка метрик ────────────────────────────────────────────────────────
+
+APP_HOST ?= 158.160.223.121
+
+check-metrics: ## Проверить health и метрики приложения через Nginx
+	@echo "=== Health ==="
+	curl -s http://$(APP_HOST)/actuator/health | python3 -m json.tool || curl -s http://$(APP_HOST)/actuator/health
+	@echo ""
+	@echo "=== Prometheus metrics (первые 20 строк) ==="
+	curl -s http://$(APP_HOST)/actuator/prometheus | head -20

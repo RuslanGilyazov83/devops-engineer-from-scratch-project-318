@@ -2,8 +2,10 @@
 - name: Развертывание приложения
   hosts: all
   become: true
-  gather_facts: false
+  gather_facts: true
 
   roles:
     - db_postgres
     - app
+    - node_exporter
+    - nginx_proxy
