@@ -1,0 +1,9 @@
+---
+- name: Настройка сервера мониторинга
+  hosts: monitoring
+  become: true
+  gather_facts: true
+
+  roles:
+    - docker
+    - prometheus

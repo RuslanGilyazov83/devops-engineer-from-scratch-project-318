@@ -1,0 +1,24 @@
+# Глобальные параметры сбора метрик
+global:
+  scrape_interval: {{ prometheus_scrape_interval }}
+  evaluation_interval: {{ prometheus_evaluation_interval }}
+  external_labels:
+    environment: production
+
+# Файлы с правилами алертинга
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+
+# Таргеты для сбора метрик — берутся из Ansible vars
+scrape_configs:
+{% for job in prometheus_scrape_configs %}
+  - job_name: "{{ job.job_name }}"
+{% if job.metrics_path is defined %}
+    metrics_path: "{{ job.metrics_path }}"
+{% endif %}
+    static_configs:
+      - targets:
+{% for target in job.targets %}
+          - "{{ target }}"
+{% endfor %}
+{% endfor %}

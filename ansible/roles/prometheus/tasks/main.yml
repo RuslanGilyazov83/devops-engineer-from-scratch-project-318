@@ -1,0 +1,53 @@
+---
+- name: Создать директории для конфигов и данных Prometheus
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: nobody
+    group: nogroup
+    mode: '0755'
+  loop:
+    - /etc/prometheus
+    - /var/lib/prometheus
+
+- name: Развернуть конфиг Prometheus
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: /etc/prometheus/prometheus.yml
+    owner: nobody
+    group: nogroup
+    mode: '0644'
+  notify: Перезапустить Prometheus
+
+- name: Развернуть правила алертинга
+  ansible.builtin.template:
+    src: alert_rules.yml.j2
+    dest: /etc/prometheus/alert_rules.yml
+    owner: nobody
+    group: nogroup
+    mode: '0644'
+  notify: Перезапустить Prometheus
+
+- name: Создать Docker-сеть мониторинга
+  community.docker.docker_network:
+    name: monitoring
+
+- name: Запустить контейнер Prometheus
+  community.docker.docker_container:
+    name: prometheus
+    image: "prom/prometheus:{{ prometheus_version }}"
+    restart_policy: unless-stopped
+    state: started
+    recreate: true
+    published_ports:
+      - "0.0.0.0:{{ prometheus_port }}:9090"
+    volumes:
+      - /etc/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    networks:
+      - name: monitoring
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle

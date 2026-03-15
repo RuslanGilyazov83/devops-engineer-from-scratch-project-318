@@ -1,6 +1,6 @@
 ---
 - name: Развертывание приложения
-  hosts: all
+  hosts: app
   become: true
   gather_facts: true
 

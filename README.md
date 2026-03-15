@@ -92,14 +92,37 @@ curl -s http://158.160.223.121/actuator/prometheus | grep http_server_requests
 sudo tail -f /var/log/nginx/app-access.log
 ```
 
+## Сервер мониторинга (Prometheus)
+
+```
+http://93.77.187.78:9090
+```
+
+| Путь | Описание |
+|------|----------|
+| `http://93.77.187.78:9090/graph` | Prometheus UI — запросы и графики |
+| `http://93.77.187.78:9090/targets` | Состояние всех таргетов (up == 1) |
+| `http://93.77.187.78:9090/alerts` | Активные алерты |
+
+### Проверка таргетов
+
+```bash
+# Проверить что все таргеты в состоянии UP
+curl -s http://93.77.187.78:9090/api/v1/targets | python3 -m json.tool | grep '"health"'
+
+# Запросить конкретную метрику
+curl -s 'http://93.77.187.78:9090/api/v1/query?query=up' | python3 -m json.tool
+```
+
 ## Порты и доступность
 
-| Порт | Сервис | Доступность |
-|------|--------|-------------|
-| 80 | Nginx reverse proxy | Публично |
-| 8080 | Spring Boot app | Только localhost (через Nginx) |
-| 9090 | Spring Actuator (management) | Только localhost (через Nginx) |
-| 9100 | Node Exporter | Только сервер мониторинга |
+| Порт | Сервер | Сервис | Доступность |
+|------|--------|--------|-------------|
+| 80 | app | Nginx reverse proxy | Публично |
+| 8080 | app | Spring Boot app | Только localhost (через Nginx) |
+| 9090 | app | Spring Actuator (management) | Только localhost (через Nginx) |
+| 9100 | app | Node Exporter | Только сервер мониторинга (Security Group) |
+| 9090 | monitoring | Prometheus | Публично (для проверки проекта) |
 
 ## Быстрый старт (локально)
 
@@ -137,16 +160,19 @@ ruslangilyazov/project-devops-deploy:latest
 
 | Файл / Директория | Назначение |
 |-------------------|------------|
-| `ansible/setup.yml` | Установка Docker на сервер |
-| `ansible/deploy.yml` | Запуск всех сервисов (БД, приложение, Node Exporter, Nginx) |
-| `ansible/inventory/hosts.yml` | Список серверов |
-| `ansible/group_vars/all/vars.yml` | Общие переменные |
+| `ansible/setup.yml` | Установка Docker (все серверы) |
+| `ansible/deploy.yml` | Запуск сервисов на app-сервере (БД, приложение, Node Exporter, Nginx) |
+| `ansible/monitoring.yml` | Запуск Prometheus на сервере мониторинга |
+| `ansible/inventory/hosts.yml` | Список серверов (группы `app` и `monitoring`) |
+| `ansible/group_vars/all/vars.yml` | Общие переменные (таргеты Prometheus, версии) |
 | `ansible/group_vars/all/vault.yml` | Секретные переменные (зашифрованы) |
+| `ansible/group_vars/monitoring/vars.yml` | Параметры Prometheus |
 | `ansible/roles/docker/` | Установка Docker |
 | `ansible/roles/db_postgres/` | PostgreSQL в Docker |
 | `ansible/roles/app/` | Контейнер приложения |
 | `ansible/roles/node_exporter/` | Node Exporter как systemd-сервис |
 | `ansible/roles/nginx_proxy/` | Nginx с JSON-логами и проброс actuator |
+| `ansible/roles/prometheus/` | Prometheus в Docker с конфигом и алертами |
 
 ## Makefile-команды
 
@@ -160,9 +186,10 @@ make run           # Запустить локально (dev профиль)
 make docker-build  # Собрать Docker-образ локально
 make docker-run    # Запустить образ локально
 
-make ansible-deps  # Установить зависимости Ansible
-make setup         # Подготовить сервер (установить Docker)
-make deploy        # Развернуть приложение
+make ansible-deps       # Установить зависимости Ansible
+make setup              # Установить Docker (все серверы)
+make deploy             # Развернуть приложение (app-сервер)
+make monitoring-setup   # Развернуть Prometheus (сервер мониторинга)
 ```
 
 ## Деплой на сервер

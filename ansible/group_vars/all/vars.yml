@@ -14,6 +14,22 @@ docker_network: bulletins-net
 node_exporter_version: "1.10.0"
 node_exporter_port: 9100
 
+# IP app-сервера — используется при шаблонизации конфига Prometheus
+app_server_host: "158.160.223.121"
+
+# IP сервера мониторинга — только с него разрешён доступ к Node Exporter
+monitoring_server_ip: "93.77.187.78"
+
+# Таргеты Prometheus — пополняются по мере добавления новых экспортеров
+prometheus_scrape_configs:
+  - job_name: "node_exporter"
+    targets:
+      - "{{ app_server_host }}:{{ node_exporter_port }}"
+  - job_name: "spring_app"
+    metrics_path: "/actuator/prometheus"
+    targets:
+      - "{{ app_server_host }}"
+
 # Секреты задаются через ansible-vault (ansible/group_vars/vault.yml)
 # postgres_db: appdb
 # postgres_user: appuser

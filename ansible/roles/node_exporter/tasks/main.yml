@@ -43,3 +43,10 @@
     state: started
     enabled: true
     daemon_reload: true
+
+- name: Открыть порт Node Exporter в ufw
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_exporter_port | string }}"
+    proto: tcp
+    src: "{{ monitoring_server_ip }}"

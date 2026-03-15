@@ -1,12 +1,13 @@
-ANSIBLE_DIR     = ansible
-INVENTORY       = $(ANSIBLE_DIR)/inventory/hosts.yml
-PLAYBOOK_SETUP  = $(ANSIBLE_DIR)/setup.yml
-PLAYBOOK_DEPLOY = $(ANSIBLE_DIR)/deploy.yml
+ANSIBLE_DIR         = ansible
+INVENTORY           = $(ANSIBLE_DIR)/inventory/hosts.yml
+PLAYBOOK_SETUP      = $(ANSIBLE_DIR)/setup.yml
+PLAYBOOK_DEPLOY     = $(ANSIBLE_DIR)/deploy.yml
+PLAYBOOK_MONITORING = $(ANSIBLE_DIR)/monitoring.yml
 
 IMAGE_NAME ?= ruslangilyazov/project-devops-deploy
 IMAGE_TAG  ?= dev
 
-.PHONY: help build test run docker-build docker-run ansible-deps setup deploy check-metrics
+.PHONY: help build test run docker-build docker-run ansible-deps setup deploy monitoring-setup check-metrics
 
 help: ## Показать список доступных команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -41,6 +42,9 @@ setup: ## Подготовить сервер: установить Docker
 
 deploy: ## Развернуть приложение на сервере
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DEPLOY) --ask-vault-pass
+
+monitoring-setup: ## Развернуть Prometheus на сервере мониторинга
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_MONITORING) --ask-vault-pass
 
 # ─── Проверка метрик ────────────────────────────────────────────────────────
 

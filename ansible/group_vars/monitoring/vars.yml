@@ -1,0 +1,9 @@
+# Версия образа Prometheus
+prometheus_version: "v2.55.0"
+
+# Порт, на котором Prometheus будет доступен снаружи
+prometheus_port: 9090
+
+# Интервалы опроса и оценки правил
+prometheus_scrape_interval: "15s"
+prometheus_evaluation_interval: "15s"
