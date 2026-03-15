@@ -9,6 +9,7 @@
   loop:
     - /etc/grafana/provisioning/datasources
     - /etc/grafana/provisioning/dashboards
+    - /etc/grafana/provisioning/alerting
     - /etc/grafana/dashboards
 
 - name: Развернуть конфиг datasource Prometheus
@@ -48,6 +49,34 @@
   loop:
     - system-resources.json
     - spring-app.json
+    - status-page.json
+  notify: Перезапустить Grafana
+
+- name: Развернуть contact point Telegram
+  ansible.builtin.template:
+    src: provisioning/alerting/contact-points.yml.j2
+    dest: /etc/grafana/provisioning/alerting/contact-points.yml
+    owner: "472"
+    group: "472"
+    mode: '0600'
+  notify: Перезапустить Grafana
+
+- name: Скопировать политики маршрутизации уведомлений
+  ansible.builtin.copy:
+    src: provisioning/alerting/notification-policies.yml
+    dest: /etc/grafana/provisioning/alerting/notification-policies.yml
+    owner: "472"
+    group: "472"
+    mode: '0644'
+  notify: Перезапустить Grafana
+
+- name: Скопировать правила алертинга
+  ansible.builtin.copy:
+    src: provisioning/alerting/alert-rules.yml
+    dest: /etc/grafana/provisioning/alerting/alert-rules.yml
+    owner: "472"
+    group: "472"
+    mode: '0644'
   notify: Перезапустить Grafana
 
 - name: Открыть порт Grafana в ufw

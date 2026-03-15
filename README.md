@@ -107,6 +107,7 @@ http://93.77.187.78:3000
 
 | Дашборд | Описание |
 |---------|----------|
+| [Status Page](http://93.77.187.78:3000/d/status-page) | Сводная страница состояния всех сервисов |
 | [System Resources](http://93.77.187.78:3000/d/system-resources) | CPU, память, диск, сеть, load average |
 | [Spring App](http://93.77.187.78:3000/d/spring-app) | HTTP-запросы, JVM, коды ответов, пул БД |
 
@@ -115,7 +116,70 @@ http://93.77.187.78:3000
 | Источник | URL | Статус |
 |----------|-----|--------|
 | Prometheus | `http://prometheus:9090` | Активен |
-| Loki | `http://loki:3100` | Ожидает Задание 5 |
+| Loki | `http://loki:3100` | Ожидает Задание 6 |
+
+## Алертинг
+
+### Contact Point — Telegram
+
+Уведомления приходят в Telegram-бот. Токены хранятся в Vault.
+
+| Переменная Vault | Описание |
+|------------------|----------|
+| `telegram_bot_token` | Токен бота от @BotFather |
+| `telegram_chat_id` | ID чата или группы (числовое значение) |
+
+#### Как создать Telegram-бот (пошагово)
+
+1. Откройте Telegram, найдите `@BotFather`
+2. Отправьте `/newbot`, задайте имя и username
+3. Скопируйте токен вида `1234567890:AABBCCddEEFF...`
+4. Создайте группу или откройте личный чат с ботом, отправьте `/start`
+5. Узнайте chat_id:
+   ```bash
+   curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | python3 -m json.tool | grep '"id"'
+   ```
+6. Добавьте в vault.yml:
+   ```bash
+   ansible-vault edit ansible/group_vars/all/vault.yml
+   ```
+   ```yaml
+   telegram_bot_token: "1234567890:AABBCCddEEFF..."
+   telegram_chat_id: "-1001234567890"
+   ```
+
+### Alert Rules
+
+Правила хранятся в `ansible/roles/grafana/files/provisioning/alerting/alert-rules.yml`.
+Разворачиваются той же командой, что и дашборды: `make monitoring-setup`.
+
+| Правило | Метрика | Порог | for |
+|---------|---------|-------|-----|
+| Сервис недоступен | `up == 0` | < 1 | 1m |
+| Высокая нагрузка CPU | `node_cpu_seconds_total` | > 80% | 5m |
+| Высокое использование памяти | `node_memory_MemAvailable_bytes` | > 85% | 5m |
+| Мало места на диске | `node_filesystem_avail_bytes` | < 15% | 5m |
+| Высокий процент ошибок 5xx | `http_server_requests_seconds_count` | > 5% | 5m |
+
+### Где смотреть алерты в Grafana
+
+- **Все правила**: `http://93.77.187.78:3000/alerting/list`
+- **Contact points**: `http://93.77.187.78:3000/alerting/notifications`
+- **Активные алерты**: `http://93.77.187.78:3000/alerting/alerts`
+- **Status Page дашборд**: `http://93.77.187.78:3000/d/status-page`
+
+### Как триггернуть тестовый алерт
+
+```bash
+# Вариант 1 — тестовая отправка через Grafana API
+curl -X POST http://93.77.187.78:3000/api/alertmanager/grafana/api/v2/alerts \
+  -H "Content-Type: application/json" \
+  -u admin:<password> \
+  -d '[{"labels":{"alertname":"TestAlert","severity":"critical"},"annotations":{"summary":"Тестовое уведомление"}}]'
+
+# Вариант 2 — через UI
+# Grafana → Alerting → Alert rules → выбрать правило → "Send test alert"
+```
 
 ## Сервер мониторинга (Prometheus)
 
@@ -198,7 +262,10 @@ ruslangilyazov/project-devops-deploy:latest
 | `ansible/roles/node_exporter/` | Node Exporter как systemd-сервис |
 | `ansible/roles/nginx_proxy/` | Nginx с JSON-логами и проброс actuator |
 | `ansible/roles/prometheus/` | Prometheus в Docker с конфигом и алертами |
-| `ansible/roles/grafana/` | Grafana в Docker с provisioning datasources и дашбордами |
+| `ansible/roles/grafana/` | Grafana в Docker с provisioning datasources, дашбордами и алертингом |
+| `ansible/roles/grafana/files/provisioning/alerting/alert-rules.yml` | Правила алертинга (5 правил) |
+| `ansible/roles/grafana/files/provisioning/alerting/notification-policies.yml` | Маршрутизация уведомлений |
+| `ansible/roles/grafana/templates/provisioning/alerting/contact-points.yml.j2` | Telegram contact point (секреты из Vault) |
 
 ## Makefile-команды
 
@@ -215,7 +282,7 @@ make docker-run    # Запустить образ локально
 make ansible-deps       # Установить зависимости Ansible
 make setup              # Установить Docker (все серверы)
 make deploy             # Развернуть приложение (app-сервер)
-make monitoring-setup   # Развернуть Prometheus (сервер мониторинга)
+make monitoring-setup   # Развернуть Prometheus + Grafana (сервер мониторинга)
 ```
 
 ## Деплой на сервер
@@ -247,4 +314,7 @@ s3_region: ru-central1
 s3_endpoint: https://storage.yandexcloud.net
 s3_access_key: your_access_key
 s3_secret_key: your_secret_key
+grafana_admin_password: your_grafana_password
+telegram_bot_token: "1234567890:AABBCCddEEFF..."
+telegram_chat_id: "-1001234567890"
 ```
