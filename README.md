@@ -92,6 +92,31 @@ curl -s http://158.160.223.121/actuator/prometheus | grep http_server_requests
 sudo tail -f /var/log/nginx/app-access.log
 ```
 
+## Grafana
+
+```
+http://93.77.187.78:3000
+```
+
+| Параметр | Значение |
+|----------|----------|
+| Логин | `admin` |
+| Пароль | задаётся через `ansible-vault` (`grafana_admin_password`) |
+
+### Дашборды
+
+| Дашборд | Описание |
+|---------|----------|
+| [System Resources](http://93.77.187.78:3000/d/system-resources) | CPU, память, диск, сеть, load average |
+| [Spring App](http://93.77.187.78:3000/d/spring-app) | HTTP-запросы, JVM, коды ответов, пул БД |
+
+### Datasources
+
+| Источник | URL | Статус |
+|----------|-----|--------|
+| Prometheus | `http://prometheus:9090` | Активен |
+| Loki | `http://loki:3100` | Ожидает Задание 5 |
+
 ## Сервер мониторинга (Prometheus)
 
 ```
@@ -173,6 +198,7 @@ ruslangilyazov/project-devops-deploy:latest
 | `ansible/roles/node_exporter/` | Node Exporter как systemd-сервис |
 | `ansible/roles/nginx_proxy/` | Nginx с JSON-логами и проброс actuator |
 | `ansible/roles/prometheus/` | Prometheus в Docker с конфигом и алертами |
+| `ansible/roles/grafana/` | Grafana в Docker с provisioning datasources и дашбордами |
 
 ## Makefile-команды
 

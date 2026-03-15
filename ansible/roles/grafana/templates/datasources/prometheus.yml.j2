@@ -1,0 +1,15 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    # Prometheus доступен по имени контейнера внутри Docker-сети monitoring
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      prometheusType: Prometheus
+      prometheusVersion: "{{ prometheus_version | replace('v', '') }}"
+      timeInterval: "15s"

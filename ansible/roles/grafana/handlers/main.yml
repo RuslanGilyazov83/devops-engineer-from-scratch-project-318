@@ -1,0 +1,6 @@
+---
+- name: Перезапустить Grafana
+  community.docker.docker_container:
+    name: grafana
+    state: started
+    restart: true
