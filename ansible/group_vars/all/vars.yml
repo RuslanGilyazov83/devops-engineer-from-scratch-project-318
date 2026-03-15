@@ -1,0 +1,21 @@
+# Docker-образ приложения
+app_image_name: ruslangilyazov/project-devops-deploy
+app_image_tag: latest
+app_container_name: bulletins-app
+
+# Порты приложения
+app_port: 8080
+app_management_port: 9090
+
+# Docker-сеть — общая для приложения и БД
+docker_network: bulletins-net
+
+# Секреты задаются через ansible-vault (ansible/group_vars/vault.yml)
+# postgres_db: appdb
+# postgres_user: appuser
+# postgres_password: secret
+# s3_bucket: ""
+# s3_region: ""
+# s3_endpoint: ""
+# s3_access_key: ""
+# s3_secret_key: ""

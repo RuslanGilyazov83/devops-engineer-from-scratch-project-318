@@ -1,0 +1,40 @@
+---
+- name: Вытащить свежий образ приложения
+  community.docker.docker_image:
+    name: "{{ app_image_name }}:{{ app_image_tag }}"
+    source: pull
+    force_source: true
+
+- name: Убедиться что Docker-сеть существует
+  community.docker.docker_network:
+    name: "{{ docker_network }}"
+
+- name: Запустить контейнер приложения
+  community.docker.docker_container:
+    name: "{{ app_container_name }}"
+    image: "{{ app_image_name }}:{{ app_image_tag }}"
+    restart_policy: unless-stopped
+    state: started
+    recreate: true
+    published_ports:
+      - "{{ app_port }}:8080"
+      - "{{ app_management_port }}:9090"
+    networks:
+      - name: "{{ docker_network }}"
+    env:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://bulletins-postgres:5432/{{ postgres_db }}"
+      SPRING_DATASOURCE_USERNAME: "{{ postgres_user }}"
+      SPRING_DATASOURCE_PASSWORD: "{{ postgres_password }}"
+      STORAGE_S3_BUCKET: "{{ s3_bucket | default('') }}"
+      STORAGE_S3_REGION: "{{ s3_region | default('') }}"
+      STORAGE_S3_ENDPOINT: "{{ s3_endpoint | default('') }}"
+      STORAGE_S3_ACCESSKEY: "{{ s3_access_key | default('') }}"
+      STORAGE_S3_SECRETKEY: "{{ s3_secret_key | default('') }}"
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9090/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

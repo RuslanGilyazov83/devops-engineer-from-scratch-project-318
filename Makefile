@@ -1,0 +1,43 @@
+ANSIBLE_DIR     = ansible
+INVENTORY       = $(ANSIBLE_DIR)/inventory/hosts.yml
+PLAYBOOK_SETUP  = $(ANSIBLE_DIR)/setup.yml
+PLAYBOOK_DEPLOY = $(ANSIBLE_DIR)/deploy.yml
+
+IMAGE_NAME ?= ruslangilyazov/project-devops-deploy
+IMAGE_TAG  ?= dev
+
+.PHONY: help build test run docker-build docker-run ansible-deps setup deploy
+
+help: ## Показать список доступных команд
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	  awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+# ─── Сборка и тесты ─────────────────────────────────────────────────────────
+
+build: ## Собрать JAR
+	./gradlew bootJar --no-daemon
+
+test: ## Прогнать тесты
+	./gradlew test --no-daemon
+
+run: ## Запустить локально (dev профиль, H2 БД)
+	./gradlew bootRun --no-daemon
+
+# ─── Docker (локально) ──────────────────────────────────────────────────────
+
+docker-build: ## Собрать Docker-образ локально
+	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
+
+docker-run: ## Запустить образ локально
+	docker run --rm -p 8080:8080 -p 9090:9090 $(IMAGE_NAME):$(IMAGE_TAG)
+
+# ─── Ansible ────────────────────────────────────────────────────────────────
+
+ansible-deps: ## Установить зависимости Ansible
+	ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
+
+setup: ## Подготовить сервер: установить Docker
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_SETUP)
+
+deploy: ## Развернуть приложение на сервере
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DEPLOY) --ask-vault-pass

@@ -1,0 +1,24 @@
+---
+- name: Создать Docker-сеть для приложения и БД
+  community.docker.docker_network:
+    name: "{{ docker_network }}"
+
+- name: Запустить контейнер PostgreSQL
+  community.docker.docker_container:
+    name: bulletins-postgres
+    image: postgres:16-alpine
+    restart_policy: always
+    state: started
+    env:
+      POSTGRES_DB: "{{ postgres_db }}"
+      POSTGRES_USER: "{{ postgres_user }}"
+      POSTGRES_PASSWORD: "{{ postgres_password }}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - name: "{{ docker_network }}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

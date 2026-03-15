@@ -1,0 +1,9 @@
+---
+- name: Развертывание приложения
+  hosts: all
+  become: true
+  gather_facts: false
+
+  roles:
+    - db_postgres
+    - app
