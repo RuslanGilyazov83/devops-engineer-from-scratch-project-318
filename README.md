@@ -8,7 +8,16 @@
 
 Исходное приложение: [hexlet-components/project-devops-deploy](https://github.com/hexlet-components/project-devops-deploy)
 
-## Адрес сервера
+## Ключевые endpoints
+
+| Ресурс | URL | Описание |
+|--------|-----|----------|
+| Приложение | http://158.160.223.121 | Доска объявлений (Nginx → Spring Boot) |
+| Prometheus | http://93.77.187.78:9090 | Метрики, targets, alerts |
+| Grafana | http://93.77.187.78:3000 | Дашборды, Loki, алертинг |
+| Loki | — | Через Grafana Explore (`{job="nginx"}`) |
+
+## Адрес app-сервера
 
 ```
 http://158.160.223.121
@@ -28,7 +37,15 @@ http://158.160.223.121
 
 > Management-порт `9090` доступен только с localhost — Nginx проксирует его наружу.
 
-## Метрики
+## Обязательные метрики
+
+| Источник | Ключевые метрики | Endpoint |
+|----------|------------------|----------|
+| Node Exporter | `node_load1`, `node_memory_*`, `node_filesystem_*` | app:9100 (только с monitoring) |
+| Spring Actuator | `http_server_requests_*`, `jvm_memory_*`, `hikaricp_*` | app:80/actuator/prometheus |
+| nginx-exporter | `nginx_connections_*`, `nginx_http_requests_total` | app:9113 |
+
+## Метрики (подробно)
 
 ### Метрики хоста (Node Exporter, порт 9100)
 
@@ -281,7 +298,10 @@ curl -s 'http://93.77.187.78:9090/api/v1/query?query=up' | python3 -m json.tool
 | Grafana показывает логи (Loki) | Explore → Loki → `{job="nginx"}` |
 | Алерты можно задёргать | Alerting → Alert rules → Send test alert |
 
-Скриншоты дашбордов (при необходимости) — в `__data__/assets/`.
+**Скриншоты и ссылки на дашборды:**
+- `assets/` — скриншоты (например, [alert-telegram.png](assets/alert-telegram.png) — тестовый алерт в Telegram)
+- `__data__/assets/` — дополнительные материалы для проверки
+- Дашборды: [Status Page](http://93.77.187.78:3000/d/status-page), [Logs](http://93.77.187.78:3000/d/logs), [Nginx](http://93.77.187.78:3000/d/nginx)
 
 ---
 
@@ -329,9 +349,38 @@ ruslangilyazov/project-devops-deploy:latest
 
 Собирается автоматически при push в `main` через GitHub Actions.
 
-## Ansible-плейбуки
+## Структура проекта (Ansible)
 
-Все файлы находятся в директории [`ansible/`](ansible/).
+```
+.
+├── ansible/
+│   ├── ansible.cfg
+│   ├── group_vars/
+│   │   ├── all/         (vars.yml, vault.yml)
+│   │   └── monitoring/
+│   ├── inventory/
+│   │   └── hosts.yml
+│   ├── roles/
+│   │   ├── app/         (Spring Boot контейнер)
+│   │   ├── db_postgres/
+│   │   ├── docker/
+│   │   ├── grafana/     (дашборды, datasources, alert rules)
+│   │   ├── loki/
+│   │   ├── node_exporter/
+│   │   ├── nginx_proxy/
+│   │   ├── nginx_exporter/
+│   │   ├── prometheus/
+│   │   └── promtail/
+│   ├── requirements.yml
+│   ├── setup.yml        (Docker на все серверы)
+│   ├── deploy.yml       (app-сервер)
+│   └── monitoring.yml    (Prometheus, Loki, Grafana)
+├── assets/              (скриншоты дашбордов, алертов)
+├── Makefile
+└── README.md
+```
+
+## Ansible-плейбуки
 
 | Файл / Директория | Назначение |
 |-------------------|------------|

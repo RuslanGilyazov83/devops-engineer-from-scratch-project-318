@@ -4,6 +4,12 @@ WORKDIR /app
 
 COPY . .
 
+# Сборка frontend и копирование в static
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+RUN cd frontend && npm ci && npm run build
+RUN mkdir -p src/main/resources/static && cp -r frontend/dist/* src/main/resources/static/
+
 # Даём права на gradlew под Linux
 RUN chmod +x ./gradlew
 

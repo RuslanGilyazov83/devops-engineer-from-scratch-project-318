@@ -1,8 +1,8 @@
 ANSIBLE_DIR         = ansible
-INVENTORY           = $(ANSIBLE_DIR)/inventory/hosts.yml
-PLAYBOOK_SETUP      = $(ANSIBLE_DIR)/setup.yml
-PLAYBOOK_DEPLOY     = $(ANSIBLE_DIR)/deploy.yml
-PLAYBOOK_MONITORING = $(ANSIBLE_DIR)/monitoring.yml
+INVENTORY           = inventory/hosts.yml
+PLAYBOOK_SETUP      = setup.yml
+PLAYBOOK_DEPLOY     = deploy.yml
+PLAYBOOK_MONITORING = monitoring.yml
 
 IMAGE_NAME ?= ruslangilyazov/project-devops-deploy
 IMAGE_TAG  ?= dev
@@ -35,16 +35,16 @@ docker-run: ## Запустить образ локально
 # ─── Ansible ────────────────────────────────────────────────────────────────
 
 ansible-deps: ## Установить зависимости Ansible
-	ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
+	cd $(ANSIBLE_DIR) && ansible-galaxy collection install -r requirements.yml
 
 setup: ## Подготовить сервер: установить Docker
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_SETUP)
+	cd $(ANSIBLE_DIR) && ansible-playbook -i $(INVENTORY) $(PLAYBOOK_SETUP)
 
 deploy: ## Развернуть приложение на сервере
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DEPLOY) --ask-vault-pass
+	cd $(ANSIBLE_DIR) && ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DEPLOY) --ask-vault-pass
 
 monitoring-setup: ## Развернуть Prometheus, Loki, Grafana на сервере мониторинга
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_MONITORING) --ask-vault-pass
+	cd $(ANSIBLE_DIR) && ansible-playbook -i $(INVENTORY) $(PLAYBOOK_MONITORING) --ask-vault-pass
 
 # ─── Lint и тесты ────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ lint: ## Проверить плейбуки ansible-lint
 	ansible-lint $(ANSIBLE_DIR)/
 
 ansible-test: ## Smoke-тест Ansible: ping хостов, проверка доступности
-	ansible all -i $(INVENTORY) -m ping
+	cd $(ANSIBLE_DIR) && ansible all -i $(INVENTORY) -m ping --ask-vault-pass
 
 smoke: ## Smoke-тест: curl к приложению, Prometheus health, Grafana
 	@echo "=== App: health ==="

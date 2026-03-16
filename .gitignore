@@ -11,11 +11,14 @@ build/
 # Логи
 *.log
 
-# Переменные окружения
+# Переменные окружения и секреты
 .env
+.env.*
+!.env.example
 
-# Ansible Vault (не коммитить незашифрованные секреты)
+# Ansible (не коммитить незашифрованные секреты)
 ansible/group_vars/vault_plain.yml
+ansible/group_vars/**/vault_plain.yml
 
 # Frontend сборка
 frontend/node_modules/
@@ -23,3 +26,12 @@ frontend/dist/
 
 # Spring Boot статика (генерируется из frontend/dist)
 src/main/resources/static/
+
+# Временные файлы
+*.tmp
+*.temp
+*.swp
+*~
+
+# Ansible
+.ansible/
