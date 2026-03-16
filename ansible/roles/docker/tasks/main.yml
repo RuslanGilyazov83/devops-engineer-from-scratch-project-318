@@ -36,13 +36,13 @@
 
 - name: Получить архитектуру системы
   ansible.builtin.command: dpkg --print-architecture
-  register: dpkg_arch
+  register: docker_dpkg_arch
   changed_when: false
 
 - name: Подключить репозиторий Docker
   ansible.builtin.apt_repository:
     repo: >-
-      deb [arch={{ dpkg_arch.stdout }} signed-by=/etc/apt/keyrings/docker.asc]
+      deb [arch={{ docker_dpkg_arch.stdout }} signed-by=/etc/apt/keyrings/docker.asc]
       https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
     state: present
     filename: docker
