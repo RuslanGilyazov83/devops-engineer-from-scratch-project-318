@@ -237,3 +237,54 @@ groups:
           severity: "critical"
           service: "spring_app"
         isPaused: false
+
+  - orgId: 1
+    name: "Log Alerts"
+    folder: "Alerts"
+    interval: 1m
+    rules:
+
+      # ─── Всплеск 5xx в логах Nginx ───────────────────────────────────────────
+      - uid: "rule-logs-5xx-spike"
+        title: "Всплеск 5xx в логах Nginx"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "loki"
+            model:
+              datasource: {type: "loki", uid: "loki"}
+              expr: "sum(count_over_time({job=\"nginx\", logtype=\"access\"} | json | status >= 500 [5m]))"
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "reduce"
+              expression: "A"
+              reducer: "last"
+              refId: "B"
+              datasource: {type: "__expr__", uid: "__expr__"}
+          - refId: "C"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "B"
+              refId: "C"
+              datasource: {type: "__expr__", uid: "__expr__"}
+              conditions:
+                - evaluator: {type: "gt", params: [5]}
+                  operator: {type: "and"}
+                  query: {params: ["C"]}
+                  reducer: {type: "last", params: []}
+        noDataState: "NoData"
+        execErrState: "Alerting"
+        for: "2m"
+        annotations:
+          summary: "Всплеск ошибок 5xx в логах Nginx"
+          description: "Более 5 записей с status>=500 за 5 минут"
+        labels:
+          severity: "warning"
+          service: "nginx"
+        isPaused: false

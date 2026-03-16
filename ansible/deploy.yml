@@ -10,3 +10,4 @@
     - node_exporter
     - nginx_proxy
     - nginx_exporter
+    - promtail

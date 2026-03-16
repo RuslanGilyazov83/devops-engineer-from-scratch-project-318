@@ -1,0 +1,17 @@
+---
+- name: Перезапустить Loki
+  community.docker.docker_container:
+    name: loki
+    image: "grafana/loki:{{ loki_version }}"
+    restart_policy: unless-stopped
+    state: started
+    recreate: true
+    published_ports:
+      - "0.0.0.0:{{ loki_port }}:3100"
+    volumes:
+      - loki_data:/loki
+      - /etc/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+    networks:
+      - name: monitoring
+    command:
+      - -config.file=/etc/loki/loki-config.yml

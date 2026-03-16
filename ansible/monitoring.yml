@@ -7,4 +7,5 @@
   roles:
     - docker
     - prometheus
+    - loki
     - grafana

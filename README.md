@@ -102,6 +102,51 @@ curl -s http://158.160.223.121:9113/metrics | grep nginx_
 sudo tail -f /var/log/nginx/app-access.log
 ```
 
+## Логи: Promtail + Loki
+
+Promtail на app-сервере собирает логи Docker-контейнеров и Nginx, отправляет в Loki на сервере мониторинга.
+
+> **Security Group**: откройте TCP 3100 на сервере мониторинга (93.77.187.78) для IP app-сервера (158.160.223.121).
+
+### Лейблы для фильтрации
+
+| Лейбл | Значение |
+|-------|----------|
+| `job` | docker, nginx |
+| `logtype` | access, error |
+| `env` | prod |
+| `app` | bulletins |
+| `host` | hostname сервера |
+
+### LogQL-запросы (Grafana Explore или дашборд Logs)
+
+```
+# Все access-логи Nginx
+{job="nginx", logtype="access"}
+
+# Ошибки 5xx
+{job="nginx", logtype="access"} | json | status >= 500
+
+# Latency > 1s
+{job="nginx", logtype="access"} | json | request_time > 1
+
+# Поиск по IP/строке
+{job=~"nginx|docker"} |~ "158.160"
+```
+
+### End-to-end проверка
+
+```bash
+# 1. Записать тестовую строку в лог на app-сервере
+ssh -i ~/.ssh/id_ed25519 yc-user@158.160.223.121 \
+  "echo '{\"time\":\"$(date -Iseconds)\",\"status\":999,\"uri\":\"/test-e2e\",\"method\":\"GET\"}' >> /var/log/nginx/app-access.log"
+
+# 2. Подождать 10–30 секунд (Promtail батчит отправку)
+
+# 3. Проверить в Grafana: Explore → Loki → запрос {job="nginx"} | json | uri="/test-e2e"
+# или открыть http://93.77.187.78:3000/explore и выбрать Loki
+```
+
 ## Grafana
 
 ```
@@ -118,6 +163,7 @@ http://93.77.187.78:3000
 | Дашборд | Описание |
 |---------|----------|
 | [Status Page](http://93.77.187.78:3000/d/status-page) | Сводная страница состояния всех сервисов |
+| [Logs](http://93.77.187.78:3000/d/logs) | Логи Nginx/Docker, 5xx, latency, поиск |
 | [Nginx](http://93.77.187.78:3000/d/nginx) | RPS, соединения, коды ответов, latency |
 | [System Resources](http://93.77.187.78:3000/d/system-resources) | CPU, память, диск, сеть, load average |
 | [Spring App](http://93.77.187.78:3000/d/spring-app) | HTTP-запросы, JVM, коды ответов, пул БД |
@@ -127,7 +173,7 @@ http://93.77.187.78:3000
 | Источник | URL | Статус |
 |----------|-----|--------|
 | Prometheus | `http://prometheus:9090` | Активен |
-| Loki | `http://loki:3100` | Ожидает Задание 7 |
+| Loki | `http://loki:3100` | Активен |
 
 ## Алертинг
 
@@ -179,6 +225,8 @@ http://93.77.187.78:3000
 - **Активные алерты**: `http://93.77.187.78:3000/alerting/alerts`
 - **Status Page дашборд**: `http://93.77.187.78:3000/d/status-page`
 - **Nginx дашборд** (RPS, коды ответов, 5xx): `http://93.77.187.78:3000/d/nginx`
+- **Logs дашборд** (LogQL, 5xx, latency): `http://93.77.187.78:3000/d/logs`
+- **Alert по логам** (всплеск 5xx): Grafana → Alerting → правило «Всплеск 5xx в логах Nginx»
 
 ### Как триггернуть тестовый алерт
 
@@ -224,7 +272,9 @@ curl -s 'http://93.77.187.78:9090/api/v1/query?query=up' | python3 -m json.tool
 | 9090 | app | Spring Actuator (management) | Только localhost (через Nginx) |
 | 9100 | app | Node Exporter | Только сервер мониторинга |
 | 9113 | app | nginx-prometheus-exporter | Только сервер мониторинга |
+| 9080 | app | Promtail (внутренний) | Только localhost |
 | 9090 | monitoring | Prometheus | Публично (для проверки проекта) |
+| 3100 | monitoring | Loki | Только app-сервер (158.160.223.121) |
 
 ## Быстрый старт (локально)
 
@@ -264,7 +314,7 @@ ruslangilyazov/project-devops-deploy:latest
 |-------------------|------------|
 | `ansible/setup.yml` | Установка Docker (все серверы) |
 | `ansible/deploy.yml` | Запуск сервисов на app-сервере (БД, приложение, Node Exporter, Nginx) |
-| `ansible/monitoring.yml` | Запуск Prometheus на сервере мониторинга |
+| `ansible/monitoring.yml` | Запуск Prometheus, Loki, Grafana на сервере мониторинга |
 | `ansible/inventory/hosts.yml` | Список серверов (группы `app` и `monitoring`) |
 | `ansible/group_vars/all/vars.yml` | Общие переменные (таргеты Prometheus, версии) |
 | `ansible/group_vars/all/vault.yml` | Секретные переменные (зашифрованы) |
@@ -275,6 +325,8 @@ ruslangilyazov/project-devops-deploy:latest
 | `ansible/roles/node_exporter/` | Node Exporter как systemd-сервис |
 | `ansible/roles/nginx_proxy/` | Nginx с JSON-логами, stub_status и проброс actuator |
 | `ansible/roles/nginx_exporter/` | nginx-prometheus-exporter (systemd, порт 9113) |
+| `ansible/roles/promtail/` | Promtail — сбор логов в Loki |
+| `ansible/roles/loki/` | Loki в Docker на сервере мониторинга |
 | `ansible/roles/prometheus/` | Prometheus в Docker с конфигом и алертами |
 | `ansible/roles/grafana/` | Grafana в Docker с provisioning datasources, дашбордами и алертингом |
 | `ansible/roles/grafana/files/provisioning/alerting/alert-rules.yml` | Правила алертинга (5 правил) |
@@ -295,8 +347,8 @@ make docker-run    # Запустить образ локально
 
 make ansible-deps       # Установить зависимости Ansible
 make setup              # Установить Docker (все серверы)
-make deploy             # Развернуть приложение (app-сервер)
-make monitoring-setup   # Развернуть Prometheus + Grafana (сервер мониторинга)
+make deploy             # Развернуть приложение + Promtail (app-сервер)
+make monitoring-setup   # Развернуть Prometheus, Loki, Grafana (сервер мониторинга)
 ```
 
 ## Деплой на сервер

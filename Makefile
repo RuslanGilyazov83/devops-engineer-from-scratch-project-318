@@ -7,7 +7,7 @@ PLAYBOOK_MONITORING = $(ANSIBLE_DIR)/monitoring.yml
 IMAGE_NAME ?= ruslangilyazov/project-devops-deploy
 IMAGE_TAG  ?= dev
 
-.PHONY: help build test run docker-build docker-run ansible-deps setup deploy monitoring-setup check-metrics
+.PHONY: help build test run docker-build docker-run ansible-deps setup deploy monitoring-setup check-metrics check-nginx check-logs
 
 help: ## Показать список доступных команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -43,7 +43,7 @@ setup: ## Подготовить сервер: установить Docker
 deploy: ## Развернуть приложение на сервере
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DEPLOY) --ask-vault-pass
 
-monitoring-setup: ## Развернуть Prometheus на сервере мониторинга
+monitoring-setup: ## Развернуть Prometheus, Loki, Grafana на сервере мониторинга
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_MONITORING) --ask-vault-pass
 
 # ─── Проверка метрик ────────────────────────────────────────────────────────
@@ -59,6 +59,12 @@ check-metrics: ## Проверить health и метрики приложени
 
 MONITORING_HOST ?= 93.77.187.78
 
-check-nginx: ## Проверить stub_status и nginx-exporter (stub_status — только с app-сервера)
+check-nginx: ## Проверить stub_status и nginx-exporter
 	@echo "=== Nginx metrics (nginx-exporter, порт 9113) ==="
 	curl -s http://$(APP_HOST):9113/metrics | grep -E "nginx_(up|connections|http_requests)" | head -15
+
+check-logs: ## End-to-end: записать тест-лог, проверить Loki (см. README)
+	@echo "Запись тестового лога на app-сервер..."
+	@echo "Выполните вручную:"
+	@echo "  ssh ... yc-user@$(APP_HOST) \"echo '{\\\"time\\\":\\\"\$$(date -Iseconds)\\\",\\\"status\\\":999,\\\"uri\\\":\\\"/test-e2e\\\",\\\"method\\\":\\\"GET\\\"}' >> /var/log/nginx/app-access.log\""
+	@echo "Через 30 сек проверьте в Grafana: Explore -> Loki -> {job=\"nginx\"} | json | uri=\"/test-e2e\""

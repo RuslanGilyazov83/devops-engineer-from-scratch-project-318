@@ -18,11 +18,17 @@ node_exporter_port: 9100
 nginx_exporter_version: "1.5.1"
 nginx_exporter_port: 9113
 
-# IP app-сервера — используется при шаблонизации конфига Prometheus
+# IP app-сервера — используется Prometheus, Loki (ufw)
 app_server_host: "158.160.223.121"
 
 # IP сервера мониторинга — только с него разрешён доступ к Node Exporter
 monitoring_server_ip: "93.77.187.78"
+
+# Loki — URL для Promtail (Promtail на app-сервере шлёт логи на monitoring)
+loki_url: "http://{{ monitoring_server_ip }}:3100"
+
+# Promtail
+promtail_version: "3.6.7"
 
 # Таргеты Prometheus — пополняются по мере добавления новых экспортеров
 prometheus_scrape_configs:

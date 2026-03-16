@@ -1,0 +1,89 @@
+---
+# Promtail — сбор логов приложения и Nginx, отправка в Loki
+# https://grafana.com/docs/loki/latest/clients/promtail/
+
+- name: Создать системного пользователя promtail
+  ansible.builtin.user:
+    name: promtail
+    system: true
+    shell: /bin/false
+    create_home: false
+
+- name: Установить unzip для распаковки архива
+  ansible.builtin.apt:
+    name: unzip
+    state: present
+    update_cache: true
+
+- name: Создать директории Promtail
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: promtail
+    group: promtail
+    mode: '0755'
+  loop:
+    - /etc/promtail
+    - /var/lib/promtail
+
+- name: Скачать архив Promtail
+  ansible.builtin.get_url:
+    url: "https://github.com/grafana/loki/releases/download/v{{ promtail_version }}/promtail-linux-amd64.zip"
+    dest: "/tmp/promtail-{{ promtail_version }}.zip"
+    mode: '0644'
+
+- name: Создать директорию для распаковки
+  ansible.builtin.file:
+    path: /tmp/promtail-extract
+    state: directory
+    mode: '0755'
+
+- name: Распаковать Promtail
+  ansible.builtin.unarchive:
+    src: "/tmp/promtail-{{ promtail_version }}.zip"
+    dest: /tmp/promtail-extract
+    remote_src: true
+
+- name: Найти бинарник Promtail
+  ansible.builtin.find:
+    paths: /tmp/promtail-extract
+    patterns: "promtail*"
+    recurse: true
+    file_type: file
+  register: promtail_binary
+  failed_when: promtail_binary.matched == 0
+
+- name: Установить бинарник Promtail
+  ansible.builtin.copy:
+    src: "{{ promtail_binary.files[0].path }}"
+    dest: /usr/local/bin/promtail
+    owner: promtail
+    group: promtail
+    mode: '0755'
+    remote_src: true
+  notify: Перезапустить Promtail
+
+- name: Развернуть конфиг Promtail
+  ansible.builtin.template:
+    src: promtail.yml.j2
+    dest: /etc/promtail/promtail.yml
+    owner: promtail
+    group: promtail
+    mode: '0644'
+  notify: Перезапустить Promtail
+
+- name: Создать systemd-юнит для Promtail
+  ansible.builtin.template:
+    src: promtail.service.j2
+    dest: /etc/systemd/system/promtail.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Перезапустить Promtail
+
+- name: Включить и запустить Promtail
+  ansible.builtin.systemd:
+    name: promtail
+    state: started
+    enabled: true
+    daemon_reload: true

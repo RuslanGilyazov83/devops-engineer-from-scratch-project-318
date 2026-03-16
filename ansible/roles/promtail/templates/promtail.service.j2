@@ -1,0 +1,16 @@
+[Unit]
+Description=Promtail - log shipper for Loki
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+# root — нужен для чтения /var/lib/docker/containers
+User=root
+Group=root
+Type=simple
+ExecStart=/usr/local/bin/promtail -config.file=/etc/promtail/promtail.yml
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
