@@ -1,0 +1,6 @@
+---
+- name: Перезапустить Nginx Exporter
+  ansible.builtin.systemd:
+    name: nginx-prometheus-exporter
+    state: restarted
+    daemon_reload: true

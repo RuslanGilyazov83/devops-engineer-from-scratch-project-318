@@ -24,6 +24,7 @@ http://158.160.223.121
 | `GET /actuator/health/liveness` | 80 (Nginx) | Liveness проба |
 | `GET /actuator/health/readiness` | 80 (Nginx) | Readiness проба |
 | `GET /actuator/prometheus` | 80 (Nginx) | Метрики Prometheus (через Nginx) |
+| `GET /stub_status` | 80 (Nginx) | Nginx stub_status (только localhost и сервер мониторинга) |
 
 > Management-порт `9090` доступен только с localhost — Nginx проксирует его наружу.
 
@@ -88,6 +89,15 @@ curl -s http://localhost:9100/metrics | grep node_filesystem_avail
 # Метрики приложения — HTTP-запросы
 curl -s http://158.160.223.121/actuator/prometheus | grep http_server_requests
 
+# stub_status Nginx (только с app-сервера или с IP мониторинга)
+curl http://127.0.0.1/stub_status
+# или с app-сервера: curl http://158.160.223.121/stub_status
+# (доступ ограничен: 127.0.0.1 и IP сервера мониторинга)
+
+# Метрики nginx-prometheus-exporter (порт 9113, доступ с сервера мониторинга)
+# Нужно открыть TCP 9113 в Security Group app-сервера для IP мониторинга (93.77.187.78)
+curl -s http://158.160.223.121:9113/metrics | grep nginx_
+
 # Логи Nginx в JSON
 sudo tail -f /var/log/nginx/app-access.log
 ```
@@ -108,6 +118,7 @@ http://93.77.187.78:3000
 | Дашборд | Описание |
 |---------|----------|
 | [Status Page](http://93.77.187.78:3000/d/status-page) | Сводная страница состояния всех сервисов |
+| [Nginx](http://93.77.187.78:3000/d/nginx) | RPS, соединения, коды ответов, latency |
 | [System Resources](http://93.77.187.78:3000/d/system-resources) | CPU, память, диск, сеть, load average |
 | [Spring App](http://93.77.187.78:3000/d/spring-app) | HTTP-запросы, JVM, коды ответов, пул БД |
 
@@ -116,7 +127,7 @@ http://93.77.187.78:3000
 | Источник | URL | Статус |
 |----------|-----|--------|
 | Prometheus | `http://prometheus:9090` | Активен |
-| Loki | `http://loki:3100` | Ожидает Задание 6 |
+| Loki | `http://loki:3100` | Ожидает Задание 7 |
 
 ## Алертинг
 
@@ -167,6 +178,7 @@ http://93.77.187.78:3000
 - **Contact points**: `http://93.77.187.78:3000/alerting/notifications`
 - **Активные алерты**: `http://93.77.187.78:3000/alerting/alerts`
 - **Status Page дашборд**: `http://93.77.187.78:3000/d/status-page`
+- **Nginx дашборд** (RPS, коды ответов, 5xx): `http://93.77.187.78:3000/d/nginx`
 
 ### Как триггернуть тестовый алерт
 
@@ -210,7 +222,8 @@ curl -s 'http://93.77.187.78:9090/api/v1/query?query=up' | python3 -m json.tool
 | 80 | app | Nginx reverse proxy | Публично |
 | 8080 | app | Spring Boot app | Только localhost (через Nginx) |
 | 9090 | app | Spring Actuator (management) | Только localhost (через Nginx) |
-| 9100 | app | Node Exporter | Только сервер мониторинга (Security Group) |
+| 9100 | app | Node Exporter | Только сервер мониторинга |
+| 9113 | app | nginx-prometheus-exporter | Только сервер мониторинга |
 | 9090 | monitoring | Prometheus | Публично (для проверки проекта) |
 
 ## Быстрый старт (локально)
@@ -260,7 +273,8 @@ ruslangilyazov/project-devops-deploy:latest
 | `ansible/roles/db_postgres/` | PostgreSQL в Docker |
 | `ansible/roles/app/` | Контейнер приложения |
 | `ansible/roles/node_exporter/` | Node Exporter как systemd-сервис |
-| `ansible/roles/nginx_proxy/` | Nginx с JSON-логами и проброс actuator |
+| `ansible/roles/nginx_proxy/` | Nginx с JSON-логами, stub_status и проброс actuator |
+| `ansible/roles/nginx_exporter/` | nginx-prometheus-exporter (systemd, порт 9113) |
 | `ansible/roles/prometheus/` | Prometheus в Docker с конфигом и алертами |
 | `ansible/roles/grafana/` | Grafana в Docker с provisioning datasources, дашбордами и алертингом |
 | `ansible/roles/grafana/files/provisioning/alerting/alert-rules.yml` | Правила алертинга (5 правил) |

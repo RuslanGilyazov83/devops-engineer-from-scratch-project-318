@@ -38,4 +38,13 @@ server {
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_read_timeout 30s;
     }
+
+    # stub_status для nginx-prometheus-exporter — доступ только localhost и сервер мониторинга
+    # = для точного совпадения, чтобы не перехватывалось location /
+    location = /stub_status {
+        stub_status;
+        allow 127.0.0.1;
+        allow {{ monitoring_server_ip }};
+        deny all;
+    }
 }

@@ -1,0 +1,70 @@
+---
+# nginx-prometheus-exporter — метрики Nginx через stub_status
+# https://github.com/nginxinc/nginx-prometheus-exporter
+
+- name: Создать системного пользователя nginx_exporter
+  ansible.builtin.user:
+    name: nginx_exporter
+    system: true
+    shell: /bin/false
+    create_home: false
+
+- name: Скачать архив nginx-prometheus-exporter
+  ansible.builtin.get_url:
+    url: "https://github.com/nginx/nginx-prometheus-exporter/releases/download/v{{ nginx_exporter_version }}/nginx-prometheus-exporter_{{ nginx_exporter_version }}_linux_amd64.tar.gz"
+    dest: "/tmp/nginx-prometheus-exporter_{{ nginx_exporter_version }}.tar.gz"
+    mode: '0644'
+
+- name: Создать директорию для распаковки
+  ansible.builtin.file:
+    path: /tmp/nginx-exporter-extract
+    state: directory
+    mode: '0755'
+
+- name: Распаковать nginx-prometheus-exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/nginx-prometheus-exporter_{{ nginx_exporter_version }}.tar.gz"
+    dest: /tmp/nginx-exporter-extract
+    remote_src: true
+
+- name: Найти распакованный бинарник nginx-prometheus-exporter
+  ansible.builtin.find:
+    paths: /tmp/nginx-exporter-extract
+    patterns: "nginx-prometheus-exporter"
+    recurse: true
+    file_type: file
+  register: nginx_exporter_binary
+  failed_when: nginx_exporter_binary.matched == 0
+
+- name: Установить бинарник nginx-prometheus-exporter
+  ansible.builtin.copy:
+    src: "{{ nginx_exporter_binary.files[0].path }}"
+    dest: /usr/local/bin/nginx-prometheus-exporter
+    owner: nginx_exporter
+    group: nginx_exporter
+    mode: '0755'
+    remote_src: true
+  notify: Перезапустить Nginx Exporter
+
+- name: Создать systemd-юнит для nginx-prometheus-exporter
+  ansible.builtin.template:
+    src: nginx_exporter.service.j2
+    dest: /etc/systemd/system/nginx-prometheus-exporter.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Перезапустить Nginx Exporter
+
+- name: Включить и запустить nginx-prometheus-exporter
+  ansible.builtin.systemd:
+    name: nginx-prometheus-exporter
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Открыть порт nginx-exporter в ufw
+  community.general.ufw:
+    rule: allow
+    port: "{{ nginx_exporter_port | string }}"
+    proto: tcp
+    src: "{{ monitoring_server_ip }}"

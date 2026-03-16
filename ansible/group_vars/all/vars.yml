@@ -14,6 +14,10 @@ docker_network: bulletins-net
 node_exporter_version: "1.10.0"
 node_exporter_port: 9100
 
+# Nginx Prometheus Exporter
+nginx_exporter_version: "1.5.1"
+nginx_exporter_port: 9113
+
 # IP app-сервера — используется при шаблонизации конфига Prometheus
 app_server_host: "158.160.223.121"
 
@@ -29,6 +33,9 @@ prometheus_scrape_configs:
     metrics_path: "/actuator/prometheus"
     targets:
       - "{{ app_server_host }}"
+  - job_name: "nginx"
+    targets:
+      - "{{ app_server_host }}:{{ nginx_exporter_port }}"
 
 # Секреты задаются через ansible-vault (ansible/group_vars/vault.yml)
 # postgres_db: appdb

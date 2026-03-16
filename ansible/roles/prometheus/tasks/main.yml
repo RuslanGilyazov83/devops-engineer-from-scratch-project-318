@@ -28,6 +28,16 @@
     mode: '0644'
   notify: Перезапустить Prometheus
 
+- name: Проверить конфиг Prometheus утилитой promtool
+  ansible.builtin.command:
+    cmd: >
+      docker run --rm
+      --entrypoint promtool
+      -v /etc/prometheus:/etc/prometheus:ro
+      prom/prometheus:{{ prometheus_version }}
+      check config /etc/prometheus/prometheus.yml
+  changed_when: false
+
 - name: Создать Docker-сеть мониторинга
   community.docker.docker_network:
     name: monitoring

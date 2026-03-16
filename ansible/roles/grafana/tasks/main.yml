@@ -50,6 +50,7 @@
     - system-resources.json
     - spring-app.json
     - status-page.json
+    - nginx.json
   notify: Перезапустить Grafana
 
 - name: Развернуть contact point Telegram

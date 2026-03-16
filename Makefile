@@ -56,3 +56,9 @@ check-metrics: ## Проверить health и метрики приложени
 	@echo ""
 	@echo "=== Prometheus metrics (первые 20 строк) ==="
 	curl -s http://$(APP_HOST)/actuator/prometheus | head -20
+
+MONITORING_HOST ?= 93.77.187.78
+
+check-nginx: ## Проверить stub_status и nginx-exporter (stub_status — только с app-сервера)
+	@echo "=== Nginx metrics (nginx-exporter, порт 9113) ==="
+	curl -s http://$(APP_HOST):9113/metrics | grep -E "nginx_(up|connections|http_requests)" | head -15
