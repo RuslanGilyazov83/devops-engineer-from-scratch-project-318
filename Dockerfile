@@ -1,14 +1,19 @@
+# Сборка frontend (Node 20)
+FROM node:20-slim AS frontend-build
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 # Сборка приложения
 FROM eclipse-temurin:21-jdk-jammy AS build
 WORKDIR /app
-
 COPY . .
 
-# Сборка frontend и копирование в static
-RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
-    && rm -rf /var/lib/apt/lists/*
-RUN cd frontend && npm ci && npm run build
-RUN mkdir -p src/main/resources/static && cp -r frontend/dist/* src/main/resources/static/
+# Копируем собранный frontend
+COPY --from=frontend-build /app/frontend/dist /app/frontend-dist
+RUN mkdir -p src/main/resources/static && cp -r /app/frontend-dist/* src/main/resources/static/
 
 # Даём права на gradlew под Linux
 RUN chmod +x ./gradlew

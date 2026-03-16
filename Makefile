@@ -7,7 +7,11 @@ PLAYBOOK_MONITORING = monitoring.yml
 IMAGE_NAME ?= ruslangilyazov/project-devops-deploy
 IMAGE_TAG  ?= dev
 
-.PHONY: help build test run docker-build docker-run ansible-deps setup deploy monitoring-setup check-metrics check-nginx check-logs lint ansible-test smoke
+.PHONY: help build test run docker-build docker-run ansible-deps setup deploy monitoring-setup check-metrics check-nginx check-logs lint ansible-test smoke code-setup
+
+# Hexlet project-action ожидает target code-setup и requirements.yml в корне
+code-setup: ## Установка зависимостей для проверки Hexlet
+	ansible-galaxy collection install -r requirements.yml
 
 help: ## Показать список доступных команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
