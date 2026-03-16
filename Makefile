@@ -7,7 +7,7 @@ PLAYBOOK_MONITORING = $(ANSIBLE_DIR)/monitoring.yml
 IMAGE_NAME ?= ruslangilyazov/project-devops-deploy
 IMAGE_TAG  ?= dev
 
-.PHONY: help build test run docker-build docker-run ansible-deps setup deploy monitoring-setup check-metrics check-nginx check-logs
+.PHONY: help build test run docker-build docker-run ansible-deps setup deploy monitoring-setup check-metrics check-nginx check-logs lint ansible-test smoke
 
 help: ## Показать список доступных команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -45,6 +45,29 @@ deploy: ## Развернуть приложение на сервере
 
 monitoring-setup: ## Развернуть Prometheus, Loki, Grafana на сервере мониторинга
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_MONITORING) --ask-vault-pass
+
+# ─── Lint и тесты ────────────────────────────────────────────────────────────
+
+lint: ## Проверить плейбуки ansible-lint
+	ansible-lint $(ANSIBLE_DIR)/
+
+ansible-test: ## Smoke-тест Ansible: ping хостов, проверка доступности
+	ansible all -i $(INVENTORY) -m ping
+
+smoke: ## Smoke-тест: curl к приложению, Prometheus health, Grafana
+	@echo "=== App: health ==="
+	@curl -sf --connect-timeout 5 http://$(APP_HOST)/actuator/health || (echo "FAIL: App health" && exit 1)
+	@echo ""
+	@echo "=== App: static/REST (bulletins) ==="
+	@curl -sf --connect-timeout 5 -o /dev/null -w "%{http_code}" http://$(APP_HOST)/api/bulletins && echo " OK" || (echo "FAIL" && exit 1)
+	@echo ""
+	@echo "=== Prometheus: targets ==="
+	@curl -sf --connect-timeout 5 "http://$(MONITORING_HOST):9090/api/v1/targets" | head -c 200 && echo "..." || (echo "FAIL: Prometheus" && exit 1)
+	@echo ""
+	@echo "=== Grafana: login page ==="
+	@curl -sf --connect-timeout 5 -o /dev/null -w "%{http_code}" http://$(MONITORING_HOST):3000/login && echo " OK" || (echo "FAIL: Grafana" && exit 1)
+	@echo ""
+	@echo "Smoke test passed."
 
 # ─── Проверка метрик ────────────────────────────────────────────────────────
 

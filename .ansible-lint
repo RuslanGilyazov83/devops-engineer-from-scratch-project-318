@@ -1,0 +1,18 @@
+# Ansible Lint configuration
+# https://ansible-lint.readthedocs.io/
+
+# Exclude paths
+exclude_paths:
+  - .cache/
+
+# Skip specific rules (uncomment if needed)
+# skip_list:
+#   - name[casing]
+#   - experimental
+
+# Use .yaml for playbooks (optional)
+# use_fqcn: true
+
+# Default options
+offline: false
+verbosity: 1

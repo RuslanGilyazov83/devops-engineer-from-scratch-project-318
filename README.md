@@ -137,14 +137,15 @@ Promtail на app-сервере собирает логи Docker-контейн
 ### End-to-end проверка
 
 ```bash
-# 1. Записать тестовую строку в лог на app-сервере
+# 1. Записать тестовую строку в лог на app-сервере (нужен sudo)
 ssh -i ~/.ssh/id_ed25519 yc-user@158.160.223.121 \
-  "echo '{\"time\":\"$(date -Iseconds)\",\"status\":999,\"uri\":\"/test-e2e\",\"method\":\"GET\"}' >> /var/log/nginx/app-access.log"
+  "echo '{\"time\":\"$(date -Iseconds)\",\"status\":999,\"uri\":\"/test-e2e\",\"method\":\"GET\"}' | sudo tee -a /var/log/nginx/app-access.log"
 
 # 2. Подождать 10–30 секунд (Promtail батчит отправку)
 
-# 3. Проверить в Grafana: Explore → Loki → запрос {job="nginx"} | json | uri="/test-e2e"
-# или открыть http://93.77.187.78:3000/explore и выбрать Loki
+# 3. Проверить в Grafana: Explore → Loki → режим Code → запрос:
+#    {job="nginx"} | json | uri="/test-e2e"
+#    Открыть http://93.77.187.78:3000/explore, выбрать Loki
 ```
 
 ## Grafana
@@ -228,18 +229,22 @@ http://93.77.187.78:3000
 - **Logs дашборд** (LogQL, 5xx, latency): `http://93.77.187.78:3000/d/logs`
 - **Alert по логам** (всплеск 5xx): Grafana → Alerting → правило «Всплеск 5xx в логах Nginx»
 
-### Как триггернуть тестовый алерт
+### Как триггернуть тестовый алерт вручную
 
+**Через UI (рекомендуется):**
+1. Grafana → Alerting → Alert rules
+2. Выберите правило (например, «Сервис недоступен» или «Всплеск 5xx в логах Nginx»)
+3. Нажмите «⋯» → **Send test alert**
+
+**Через API (для автоматизации):**
 ```bash
-# Вариант 1 — тестовая отправка через Grafana API
 curl -X POST http://93.77.187.78:3000/api/alertmanager/grafana/api/v2/alerts \
   -H "Content-Type: application/json" \
-  -u admin:<password> \
+  -u "admin:YOUR_GRAFANA_PASSWORD" \
   -d '[{"labels":{"alertname":"TestAlert","severity":"critical"},"annotations":{"summary":"Тестовое уведомление"}}]'
-
-# Вариант 2 — через UI
-# Grafana → Alerting → Alert rules → выбрать правило → "Send test alert"
 ```
+
+> Пароль Grafana берётся из Vault (`grafana_admin_password`).
 
 ## Сервер мониторинга (Prometheus)
 
@@ -263,6 +268,23 @@ curl -s http://93.77.187.78:9090/api/v1/targets | python3 -m json.tool | grep '"
 curl -s 'http://93.77.187.78:9090/api/v1/query?query=up' | python3 -m json.tool
 ```
 
+## Ручная проверка (для приёмки)
+
+Проверяющий должен убедиться:
+
+| Проверка | Команда / действие |
+|----------|-------------------|
+| Обе машины доступны | `make ansible-test` — ping хостов |
+| Приложение отдаёт REST | `curl http://158.160.223.121/api/bulletins` |
+| Приложение — статика | `curl -I http://158.160.223.121/` |
+| Grafana показывает метрики | Открыть http://93.77.187.78:3000 → дашборд System Resources |
+| Grafana показывает логи (Loki) | Explore → Loki → `{job="nginx"}` |
+| Алерты можно задёргать | Alerting → Alert rules → Send test alert |
+
+Скриншоты дашбордов (при необходимости) — в `__data__/assets/`.
+
+---
+
 ## Порты и доступность
 
 | Порт | Сервер | Сервис | Доступность |
@@ -274,6 +296,7 @@ curl -s 'http://93.77.187.78:9090/api/v1/query?query=up' | python3 -m json.tool
 | 9113 | app | nginx-prometheus-exporter | Только сервер мониторинга |
 | 9080 | app | Promtail (внутренний) | Только localhost |
 | 9090 | monitoring | Prometheus | Публично (для проверки проекта) |
+| 3000 | monitoring | Grafana | Публично |
 | 3100 | monitoring | Loki | Только app-сервер (158.160.223.121) |
 
 ## Быстрый старт (локально)
@@ -349,9 +372,155 @@ make ansible-deps       # Установить зависимости Ansible
 make setup              # Установить Docker (все серверы)
 make deploy             # Развернуть приложение + Promtail (app-сервер)
 make monitoring-setup   # Развернуть Prometheus, Loki, Grafana (сервер мониторинга)
+
+make lint          # ansible-lint: проверить плейбуки
+make ansible-test  # Smoke: ping всех хостов
+make smoke         # Smoke: curl к приложению, Prometheus, Grafana
 ```
 
-## Деплой на сервер
+> Для `make lint` нужен ansible-lint: `pip install ansible-lint`. Лучше запускать на Linux/WSL (на Windows возможны ошибки из‑за зависимости `grp`). В CI ansible-lint выполняется автоматически.
+
+## Развёртывание с нуля (полная процедура)
+
+Ниже — пошаговая инструкция для развёртывания обеих ВМ с нуля.
+
+### 1. Подготовка ключей и окружения
+
+```bash
+# Убедитесь, что есть SSH-ключ (например Ed25519)
+ls -la ~/.ssh/id_ed25519
+
+# Если нет — создайте
+ssh-keygen -t ed25519 -C "your-email@example.com" -f ~/.ssh/id_ed25519 -N ""
+```
+
+Добавьте публичный ключ (`~/.ssh/id_ed25519.pub`) в Yandex Cloud при создании ВМ (или через консоль → Compute Cloud → ВМ → SSH-ключи).
+
+### 2. Создание ВМ в Yandex Cloud
+
+1. **App-сервер**: Ubuntu 22.04, минимум 2 vCPU, 2 GB RAM. Публичный IP.
+2. **Monitoring-сервер**: Ubuntu 22.04, 2 vCPU, 2 GB RAM. Публичный IP.
+3. Настройте Security Groups (см. [Порты и доступность](#порты-и-доступность)).
+
+### 3. Fork и клонирование
+
+```bash
+git clone https://github.com/<your-username>/devops-engineer-from-scratch-project-318.git
+cd devops-engineer-from-scratch-project-318
+```
+
+### 4. Переменные Vault
+
+Создайте зашифрованный файл с секретами:
+
+```bash
+ansible-vault create ansible/group_vars/all/vault.yml
+```
+
+Вставьте (замените значения на свои):
+
+```yaml
+postgres_db: appdb
+postgres_user: appuser
+postgres_password: YOUR_SECURE_PASSWORD
+s3_bucket: your-bucket-name
+s3_region: ru-central1
+s3_endpoint: https://storage.yandexcloud.net
+s3_access_key: YOUR_ACCESS_KEY
+s3_secret_key: YOUR_SECRET_KEY
+grafana_admin_password: YOUR_GRAFANA_PASSWORD
+telegram_bot_token: "1234567890:AABBCCddEEFF..."
+telegram_chat_id: "-1001234567890"
+```
+
+Сохранение: `:wq` (vim) или Ctrl+S (другие редакторы). Введите пароль Vault при сохранении.
+
+### 5. Inventory
+
+Отредактируйте `ansible/inventory/hosts.yml` — укажите IP ваших ВМ и SSH-пользователя:
+
+```yaml
+app:
+  hosts:
+    app_server:
+      ansible_host: <APP_SERVER_IP>
+      ansible_user: ubuntu   # или yc-user
+      ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+
+monitoring:
+  hosts:
+    monitoring_server:
+      ansible_host: <MONITORING_SERVER_IP>
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+```
+
+Обновите `ansible/group_vars/all/vars.yml`: `app_server_host` и `monitoring_server_ip`.
+
+### 6. Запуск плейбуков
+
+```bash
+# Установить зависимости Ansible
+make ansible-deps
+
+# Подготовить обе машины (Docker)
+make setup
+
+# Развернуть приложение на app-сервере
+make deploy
+
+# Развернуть Prometheus, Loki, Grafana на monitoring-сервере
+make monitoring-setup
+```
+
+При каждом `make deploy` и `make monitoring-setup` будет запрашиваться пароль Vault (`--ask-vault-pass`).
+
+### 7. Проверка домена и мониторинга
+
+```bash
+# Приложение
+curl http://<APP_IP>/actuator/health
+curl http://<APP_IP>/api/bulletins
+
+# Prometheus
+curl http://<MONITORING_IP>:9090/-/healthy
+
+# Grafana
+open http://<MONITORING_IP>:3000   # логин admin, пароль из Vault
+
+# Smoke-тест (все проверки одной командой)
+make smoke APP_HOST=<APP_IP> MONITORING_HOST=<MONITORING_IP>
+```
+
+### 8. Переменные окружения (опционально)
+
+Для CI/CD или скриптов можно задать IP через переменные:
+
+```bash
+export APP_HOST=158.160.223.121
+export MONITORING_HOST=93.77.187.78
+make smoke
+```
+
+---
+
+## Справка: IP, URL, порты, уведомления
+
+| Параметр | Значение |
+|----------|----------|
+| **App-сервер** | 158.160.223.121 |
+| **Monitoring-сервер** | 93.77.187.78 |
+| **Приложение** | http://158.160.223.121 |
+| **Grafana** | http://93.77.187.78:3000 |
+| **Prometheus** | http://93.77.187.78:9090 |
+| **Loki** | http://93.77.187.78:3100 (внутри сети) |
+| **Уведомления** | Telegram (токен и chat_id в Vault) |
+
+Полная таблица портов — см. [Порты и доступность](#порты-и-доступность).
+
+---
+
+## Деплой на сервер (кратко)
 
 ```bash
 # 1. Установить зависимости Ansible
@@ -367,6 +536,9 @@ make setup
 
 # 5. Развернуть приложение
 make deploy
+
+# 6. Развернуть мониторинг (на отдельном сервере)
+make monitoring-setup
 ```
 
 ### Секреты в vault.yml
