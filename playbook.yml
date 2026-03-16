@@ -1,0 +1,10 @@
+---
+# Основной плейбук для проверки Hexlet (hosts: localhost, без SSH)
+- name: Проверка Ansible
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Проверка доступности
+      ansible.builtin.debug:
+        msg: "Playbook check OK"
