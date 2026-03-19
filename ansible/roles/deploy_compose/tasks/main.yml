@@ -1,0 +1,167 @@
+---
+# Остановить старые systemd-сервисы (могут отсутствовать — не ошибка)
+- name: Остановить старые сервисы (app)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - node_exporter
+    - nginx-prometheus-exporter
+    - promtail
+  failed_when: false
+  when: deploy_compose_file == 'docker-compose.app.yml'
+
+- name: Остановить Nginx если был установлен через apt
+  ansible.builtin.systemd:
+    name: nginx
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: deploy_compose_file == 'docker-compose.app.yml'
+
+# Остановить старые systemd-сервисы мониторинга (могут отсутствовать — не ошибка)
+- name: Остановить старые сервисы (monitoring)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - loki
+    - prometheus
+    - grafana
+  failed_when: false
+  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+
+# Остановить старые standalone-контейнеры (archive-roles: docker run grafana/prometheus/loki)
+- name: Остановить и удалить старые контейнеры мониторинга
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - grafana
+    - prometheus
+    - loki
+  ignore_errors: true
+  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+
+- name: Установить и настроить ufw (app)
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: tcp
+    src: "{{ item.src }}"
+  loop:
+    - { port: "9100", src: "{{ monitoring_server_ip }}" }
+    - { port: "9113", src: "{{ monitoring_server_ip }}" }
+  when:
+    - deploy_compose_file == 'docker-compose.app.yml'
+    - monitoring_server_ip is defined
+
+- name: Установить и настроить ufw (monitoring)
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: tcp
+    src: "{{ item.src }}"
+  loop:
+    - { port: "3100", src: "{{ app_server_host }}" }
+    - { port: "3000", src: "0.0.0.0/0" }
+    - { port: "9090", src: "0.0.0.0/0" }
+  when:
+    - deploy_compose_file == 'docker-compose.monitoring.yml'
+    - app_server_host is defined
+
+- name: Ensure deploy target directory exists
+  ansible.builtin.file:
+    path: "{{ deploy_target_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy deploy directory to target
+  ansible.builtin.copy:
+    src: "{{ deploy_src }}/"
+    dest: "{{ deploy_target_dir }}/"
+
+- name: Template nginx app config (app only)
+  ansible.builtin.template:
+    src: "{{ deploy_src }}/configs/nginx/app.conf.j2"
+    dest: "{{ deploy_target_dir }}/configs/nginx/app.conf"
+    mode: '0644'
+  when: deploy_compose_file == 'docker-compose.app.yml'
+
+- name: Template promtail config (app only)
+  ansible.builtin.template:
+    src: "{{ deploy_src }}/configs/promtail.yml.j2"
+    dest: "{{ deploy_target_dir }}/configs/promtail.yml"
+    mode: '0644'
+  when: deploy_compose_file == 'docker-compose.app.yml'
+
+- name: Template prometheus config (monitoring only)
+  ansible.builtin.template:
+    src: "{{ deploy_src }}/configs/prometheus.yml.j2"
+    dest: "{{ deploy_target_dir }}/configs/prometheus.yml"
+    mode: '0644'
+  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+
+- name: Template Grafana contact-points (monitoring only)
+  ansible.builtin.template:
+    src: "{{ deploy_src }}/configs/grafana/provisioning/alerting/contact-points.yml.j2"
+    dest: "{{ deploy_target_dir }}/configs/grafana/provisioning/alerting/contact-points.yml"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+
+- name: Create Grafana provisioning/plugins directory (required by Grafana)
+  ansible.builtin.file:
+    path: "{{ deploy_target_dir }}/configs/grafana/provisioning/plugins"
+    state: directory
+    mode: "0755"
+  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+
+- name: Fix Grafana config ownership (Grafana runs as UID 472)
+  ansible.builtin.file:
+    path: "{{ deploy_target_dir }}/configs/grafana"
+    state: directory
+    recurse: true
+    owner: "472"
+    group: "472"
+  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+
+- name: Create .env file for app stack
+  ansible.builtin.copy:
+    content: |
+      POSTGRES_DB={{ postgres_db }}
+      POSTGRES_USER={{ postgres_user }}
+      POSTGRES_PASSWORD={{ postgres_password }}
+      S3_BUCKET={{ s3_bucket | default('') }}
+      S3_REGION={{ s3_region | default('') }}
+      S3_ENDPOINT={{ s3_endpoint | default('') }}
+      S3_ACCESS_KEY={{ s3_access_key | default('') }}
+      S3_SECRET_KEY={{ s3_secret_key | default('') }}
+    dest: "{{ deploy_target_dir }}/.env"
+    mode: '0600'
+    force: true
+  when: deploy_compose_file == 'docker-compose.app.yml'
+
+- name: Create .env file for monitoring stack
+  ansible.builtin.copy:
+    content: |
+      GRAFANA_ADMIN_USER={{ grafana_admin_user | default('admin') }}
+      GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
+    dest: "{{ deploy_target_dir }}/.env"
+    mode: '0600'
+    force: true
+  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+
+- name: Run docker compose up
+  community.docker.docker_compose_v2:
+    project_src: "{{ deploy_target_dir }}"
+    project_name: "{{ deploy_project_name | default('stack') }}"
+    files:
+      - "{{ deploy_target_dir }}/{{ deploy_compose_file }}"
+    env_files:
+      - "{{ deploy_target_dir }}/.env"
+    state: present
+  register: compose_result

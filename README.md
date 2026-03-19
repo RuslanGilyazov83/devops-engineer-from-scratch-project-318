@@ -154,9 +154,9 @@ Promtail на app-сервере собирает логи Docker-контейн
 ### End-to-end проверка
 
 ```bash
-# 1. Записать тестовую строку в лог на app-сервере (нужен sudo)
+# 1. Записать тестовую строку в лог (логи в Docker volume — пишем через docker exec)
 ssh -i ~/.ssh/id_ed25519 yc-user@158.160.223.121 \
-  "echo '{\"time\":\"$(date -Iseconds)\",\"status\":999,\"uri\":\"/test-e2e\",\"method\":\"GET\"}' | sudo tee -a /var/log/nginx/app-access.log"
+  'docker exec app-nginx-1 sh -c "echo \"{\\\"time\\\":\\\"$(date -Iseconds)\\\",\\\"status\\\":999,\\\"uri\\\":\\\"/test-e2e\\\",\\\"method\\\":\\\"GET\\\"}\" >> /var/log/nginx/app-access.log"'
 
 # 2. Подождать 10–30 секунд (Promtail батчит отправку)
 
@@ -225,7 +225,7 @@ http://93.77.187.78:3000
 
 ### Alert Rules
 
-Правила хранятся в `ansible/roles/grafana/files/provisioning/alerting/alert-rules.yml`.
+Правила хранятся в `deploy/configs/grafana/provisioning/alerting/alert-rules.yml`.
 Разворачиваются той же командой, что и дашборды: `make monitoring-setup`.
 
 | Правило | Метрика | Порог | for |
@@ -349,10 +349,31 @@ ruslangilyazov/project-devops-deploy:latest
 
 Собирается автоматически при push в `main` через GitHub Actions.
 
+## Docker Compose
+
+Развёртывание выполняется через **Docker Compose** и единый каталог `deploy/`:
+
+| Файл | Сервер | Сервисы |
+|------|--------|---------|
+| `deploy/docker-compose.app.yml` | app | app, postgres, nginx, node-exporter, nginx-prometheus-exporter, promtail |
+| `deploy/docker-compose.monitoring.yml` | monitoring | prometheus, loki, grafana |
+
+Ansible роль `deploy_compose` копирует каталог `deploy/` в `/opt/app` или `/opt/monitoring` и запускает `docker compose up -d`. Секреты передаются через переменные окружения (Vault). Конфигурации (nginx, promtail, prometheus) — шаблоны Jinja2 с подстановкой переменных.
+
 ## Структура проекта (Ansible)
 
 ```
 .
+├── deploy/                   (Docker Compose и конфиги)
+│   ├── docker-compose.app.yml
+│   ├── docker-compose.monitoring.yml
+│   └── configs/
+│       ├── nginx/
+│       ├── promtail.yml.j2
+│       ├── prometheus.yml.j2
+│       ├── loki-config.yml
+│       ├── alert_rules.yml
+│       └── grafana/
 ├── ansible/
 │   ├── ansible.cfg
 │   ├── group_vars/
@@ -361,21 +382,14 @@ ruslangilyazov/project-devops-deploy:latest
 │   ├── inventory/
 │   │   └── hosts.yml
 │   ├── roles/
-│   │   ├── app/         (Spring Boot контейнер)
-│   │   ├── db_postgres/
-│   │   ├── docker/
-│   │   ├── grafana/     (дашборды, datasources, alert rules)
-│   │   ├── loki/
-│   │   ├── node_exporter/
-│   │   ├── nginx_proxy/
-│   │   ├── nginx_exporter/
-│   │   ├── prometheus/
-│   │   └── promtail/
+│   │   ├── docker/      (установка Docker)
+│   │   ├── deploy_compose/  (копирование deploy/, docker compose up)
+│   │   └── archive/    (старые роли app, db_postgres, nginx_*, и др.)
 │   ├── requirements.yml
 │   ├── setup.yml        (Docker на все серверы)
-│   ├── deploy.yml       (app-сервер)
-│   └── monitoring.yml    (Prometheus, Loki, Grafana)
-├── assets/              (скриншоты дашбордов, алертов)
+│   ├── deploy.yml       (app-сервер: docker + deploy_compose)
+│   └── monitoring.yml   (monitoring: docker + deploy_compose)
+├── assets/
 ├── Makefile
 └── README.md
 ```
@@ -392,18 +406,11 @@ ruslangilyazov/project-devops-deploy:latest
 | `ansible/group_vars/all/vault.yml` | Секретные переменные (зашифрованы) |
 | `ansible/group_vars/monitoring/vars.yml` | Параметры Prometheus |
 | `ansible/roles/docker/` | Установка Docker |
-| `ansible/roles/db_postgres/` | PostgreSQL в Docker |
-| `ansible/roles/app/` | Контейнер приложения |
-| `ansible/roles/node_exporter/` | Node Exporter как systemd-сервис |
-| `ansible/roles/nginx_proxy/` | Nginx с JSON-логами, stub_status и проброс actuator |
-| `ansible/roles/nginx_exporter/` | nginx-prometheus-exporter (systemd, порт 9113) |
-| `ansible/roles/promtail/` | Promtail — сбор логов в Loki |
-| `ansible/roles/loki/` | Loki в Docker на сервере мониторинга |
-| `ansible/roles/prometheus/` | Prometheus в Docker с конфигом и алертами |
-| `ansible/roles/grafana/` | Grafana в Docker с provisioning datasources, дашбордами и алертингом |
-| `ansible/roles/grafana/files/provisioning/alerting/alert-rules.yml` | Правила алертинга (5 правил) |
-| `ansible/roles/grafana/files/provisioning/alerting/notification-policies.yml` | Маршрутизация уведомлений |
-| `ansible/roles/grafana/templates/provisioning/alerting/contact-points.yml.j2` | Telegram contact point (секреты из Vault) |
+| `ansible/roles/deploy_compose/` | Копирует `deploy/` на сервер, шаблонизирует конфиги, запускает `docker compose up -d` |
+| `ansible/roles/archive/` | Старые роли (app, db_postgres, nginx_proxy, node_exporter и др.) — заменены на deploy_compose |
+| `deploy/configs/grafana/provisioning/alerting/alert-rules.yml` | Правила алертинга (5 правил) |
+| `deploy/configs/grafana/provisioning/alerting/notification-policies.yml` | Маршрутизация уведомлений |
+| `deploy/configs/grafana/provisioning/alerting/contact-points.yml.j2` | Telegram contact point (шаблон, секреты из Vault) |
 
 ## Makefile-команды
 

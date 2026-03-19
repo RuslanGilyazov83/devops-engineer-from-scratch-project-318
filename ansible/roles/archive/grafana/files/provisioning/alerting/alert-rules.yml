@@ -1,0 +1,290 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: "System Alerts"
+    folder: "Alerts"
+    interval: 1m
+    rules:
+
+      # ─── Сервис недоступен ──────────────────────────────────────────────────
+      - uid: "rule-instance-down"
+        title: "Сервис недоступен"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "prometheus"
+            model:
+              datasource: {type: "prometheus", uid: "prometheus"}
+              expr: "up"
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "reduce"
+              expression: "A"
+              reducer: "last"
+              refId: "B"
+              datasource: {type: "__expr__", uid: "__expr__"}
+          - refId: "C"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "B"
+              refId: "C"
+              datasource: {type: "__expr__", uid: "__expr__"}
+              conditions:
+                - evaluator: {type: "lt", params: [1]}
+                  operator: {type: "and"}
+                  query: {params: ["C"]}
+                  reducer: {type: "last", params: []}
+        noDataState: "Alerting"
+        execErrState: "Alerting"
+        for: "1m"
+        annotations:
+          summary: "Сервис {{ $labels.instance }} недоступен"
+          description: "{{ $labels.job }} не отвечает более 1 минуты. Проверьте контейнер."
+        labels:
+          severity: "critical"
+          service: "{{ $labels.job }}"
+        isPaused: false
+
+      # ─── Высокая нагрузка CPU ───────────────────────────────────────────────
+      - uid: "rule-high-cpu"
+        title: "Высокая нагрузка CPU"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "prometheus"
+            model:
+              datasource: {type: "prometheus", uid: "prometheus"}
+              expr: "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)"
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "reduce"
+              expression: "A"
+              reducer: "last"
+              refId: "B"
+              datasource: {type: "__expr__", uid: "__expr__"}
+          - refId: "C"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "B"
+              refId: "C"
+              datasource: {type: "__expr__", uid: "__expr__"}
+              conditions:
+                - evaluator: {type: "gt", params: [80]}
+                  operator: {type: "and"}
+                  query: {params: ["C"]}
+                  reducer: {type: "last", params: []}
+        noDataState: "NoData"
+        execErrState: "Alerting"
+        for: "5m"
+        annotations:
+          summary: "Высокая нагрузка CPU на {{ $labels.instance }}"
+          description: "CPU загружен на {{ $value | printf \"%.1f\" }}% в течение 5 минут"
+        labels:
+          severity: "warning"
+          service: "node"
+        isPaused: false
+
+      # ─── Высокое использование памяти ───────────────────────────────────────
+      - uid: "rule-high-memory"
+        title: "Высокое использование памяти"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "prometheus"
+            model:
+              datasource: {type: "prometheus", uid: "prometheus"}
+              expr: "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100"
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "reduce"
+              expression: "A"
+              reducer: "last"
+              refId: "B"
+              datasource: {type: "__expr__", uid: "__expr__"}
+          - refId: "C"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "B"
+              refId: "C"
+              datasource: {type: "__expr__", uid: "__expr__"}
+              conditions:
+                - evaluator: {type: "gt", params: [85]}
+                  operator: {type: "and"}
+                  query: {params: ["C"]}
+                  reducer: {type: "last", params: []}
+        noDataState: "NoData"
+        execErrState: "Alerting"
+        for: "5m"
+        annotations:
+          summary: "Критически мало памяти на {{ $labels.instance }}"
+          description: "Занято {{ $value | printf \"%.1f\" }}% оперативной памяти в течение 5 минут"
+        labels:
+          severity: "warning"
+          service: "node"
+        isPaused: false
+
+      # ─── Мало свободного места на диске ─────────────────────────────────────
+      - uid: "rule-low-disk"
+        title: "Мало места на диске"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "prometheus"
+            model:
+              datasource: {type: "prometheus", uid: "prometheus"}
+              expr: "node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"} * 100"
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "reduce"
+              expression: "A"
+              reducer: "last"
+              refId: "B"
+              datasource: {type: "__expr__", uid: "__expr__"}
+          - refId: "C"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "B"
+              refId: "C"
+              datasource: {type: "__expr__", uid: "__expr__"}
+              conditions:
+                - evaluator: {type: "lt", params: [15]}
+                  operator: {type: "and"}
+                  query: {params: ["C"]}
+                  reducer: {type: "last", params: []}
+        noDataState: "NoData"
+        execErrState: "Alerting"
+        for: "5m"
+        annotations:
+          summary: "Критически мало места на диске {{ $labels.instance }}"
+          description: "Осталось {{ $value | printf \"%.1f\" }}% свободного места на /"
+        labels:
+          severity: "warning"
+          service: "node"
+        isPaused: false
+
+  - orgId: 1
+    name: "Application Alerts"
+    folder: "Alerts"
+    interval: 1m
+    rules:
+
+      # ─── Высокий процент ошибок 5xx ─────────────────────────────────────────
+      - uid: "rule-high-5xx"
+        title: "Высокий процент ошибок 5xx"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "prometheus"
+            model:
+              datasource: {type: "prometheus", uid: "prometheus"}
+              expr: "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m])) * 100"
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "reduce"
+              expression: "A"
+              reducer: "last"
+              refId: "B"
+              datasource: {type: "__expr__", uid: "__expr__"}
+          - refId: "C"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "B"
+              refId: "C"
+              datasource: {type: "__expr__", uid: "__expr__"}
+              conditions:
+                - evaluator: {type: "gt", params: [5]}
+                  operator: {type: "and"}
+                  query: {params: ["C"]}
+                  reducer: {type: "last", params: []}
+        noDataState: "NoData"
+        execErrState: "Alerting"
+        for: "5m"
+        annotations:
+          summary: "Высокий процент ошибок 5xx в приложении"
+          description: "{{ $value | printf \"%.1f\" }}% запросов завершаются ошибкой 5xx в течение 5 минут"
+        labels:
+          severity: "critical"
+          service: "spring_app"
+        isPaused: false
+
+  - orgId: 1
+    name: "Log Alerts"
+    folder: "Alerts"
+    interval: 1m
+    rules:
+
+      # ─── Всплеск 5xx в логах Nginx ───────────────────────────────────────────
+      - uid: "rule-logs-5xx-spike"
+        title: "Всплеск 5xx в логах Nginx"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "loki"
+            model:
+              datasource: {type: "loki", uid: "loki"}
+              expr: "sum(count_over_time({job=\"nginx\", logtype=\"access\"} | json | status >= 500 [5m]))"
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "reduce"
+              expression: "A"
+              reducer: "last"
+              refId: "B"
+              datasource: {type: "__expr__", uid: "__expr__"}
+          - refId: "C"
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "B"
+              refId: "C"
+              datasource: {type: "__expr__", uid: "__expr__"}
+              conditions:
+                - evaluator: {type: "gt", params: [5]}
+                  operator: {type: "and"}
+                  query: {params: ["C"]}
+                  reducer: {type: "last", params: []}
+        noDataState: "NoData"
+        execErrState: "Alerting"
+        for: "2m"
+        annotations:
+          summary: "Всплеск ошибок 5xx в логах Nginx"
+          description: "Более 5 записей с status>=500 за 5 минут"
+        labels:
+          severity: "warning"
+          service: "nginx"
+        isPaused: false

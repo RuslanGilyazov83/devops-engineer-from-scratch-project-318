@@ -1,0 +1,21 @@
+global:
+  scrape_interval: {{ prometheus_scrape_interval }}
+  evaluation_interval: {{ prometheus_evaluation_interval }}
+  external_labels:
+    environment: production
+
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+
+scrape_configs:
+{% for job in prometheus_scrape_configs %}
+  - job_name: "{{ job.job_name }}"
+{% if job.metrics_path is defined %}
+    metrics_path: "{{ job.metrics_path }}"
+{% endif %}
+    static_configs:
+      - targets:
+{% for target in job.targets %}
+          - "{{ target }}"
+{% endfor %}
+{% endfor %}

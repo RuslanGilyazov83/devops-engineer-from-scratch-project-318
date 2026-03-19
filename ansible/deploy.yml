@@ -5,9 +5,9 @@
   gather_facts: true
 
   roles:
-    - db_postgres
-    - app
-    - node_exporter
-    - nginx_proxy
-    - nginx_exporter
-    - promtail
+    - role: docker
+    - role: deploy_compose
+      vars:
+        deploy_target_dir: /opt/app
+        deploy_compose_file: docker-compose.app.yml
+        deploy_project_name: app

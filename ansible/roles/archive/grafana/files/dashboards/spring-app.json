@@ -1,0 +1,207 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "DOWN"}, "1": {"color": "green", "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "title": "Состояние приложения",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "up{job=\"spring_app\"}",
+          "legendFormat": "App"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"fixedColor": "blue", "mode": "fixed"},
+          "unit": "s",
+          "mappings": []
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "title": "Uptime приложения",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "process_uptime_seconds{job=\"spring_app\"}",
+          "legendFormat": "Uptime"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"fixedColor": "orange", "mode": "fixed"},
+          "unit": "reqps",
+          "mappings": []
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "title": "Запросов в секунду",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"spring_app\"}[5m]))",
+          "legendFormat": "RPS"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 15}]
+          }
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "title": "Ошибки 5xx %",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"spring_app\", status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{job=\"spring_app\"}[5m])) * 100",
+          "legendFormat": "Error rate"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 10},
+          "unit": "reqps"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "id": 5,
+      "title": "HTTP-запросы по статусам",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum by(status) (rate(http_server_requests_seconds_count{job=\"spring_app\"}[5m]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 5},
+          "unit": "s"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "id": 6,
+      "title": "Среднее время ответа",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum by(uri) (rate(http_server_requests_seconds_sum{job=\"spring_app\"}[5m])) / sum by(uri) (rate(http_server_requests_seconds_count{job=\"spring_app\"}[5m]))",
+          "legendFormat": "{{uri}}"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 10},
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "id": 7,
+      "title": "JVM Память",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "jvm_memory_used_bytes{job=\"spring_app\", area=\"heap\"}",
+          "legendFormat": "Heap used {{id}}"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "jvm_memory_max_bytes{job=\"spring_app\", area=\"heap\"}",
+          "legendFormat": "Heap max {{id}}"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "id": 8,
+      "title": "Пул соединений с БД (HikariCP)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "hikaricp_connections_active{job=\"spring_app\"}",
+          "legendFormat": "Active"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "hikaricp_connections_idle{job=\"spring_app\"}",
+          "legendFormat": "Idle"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "hikaricp_connections_pending{job=\"spring_app\"}",
+          "legendFormat": "Pending"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["spring", "application", "jvm"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Spring App",
+  "uid": "spring-app",
+  "version": 1
+}

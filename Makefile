@@ -11,7 +11,11 @@ IMAGE_TAG  ?= dev
 
 # Hexlet project-action ожидает target code-setup и requirements.yml в корне
 code-setup: ## Установка зависимостей для проверки Hexlet
-	ansible-galaxy collection install -r requirements.yml
+	@if command -v ansible-galaxy >/dev/null 2>&1; then \
+		ansible-galaxy collection install -r requirements.yml; \
+	else \
+		echo "ansible-galaxy not found, skipping"; \
+	fi
 
 help: ## Показать список доступных команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -42,7 +46,7 @@ ansible-deps: ## Установить зависимости Ansible
 	cd $(ANSIBLE_DIR) && ansible-galaxy collection install -r requirements.yml
 
 setup: ## Подготовить сервер: установить Docker
-	cd $(ANSIBLE_DIR) && ansible-playbook -i $(INVENTORY) $(PLAYBOOK_SETUP)
+	cd $(ANSIBLE_DIR) && ansible-playbook -i $(INVENTORY) $(PLAYBOOK_SETUP) --ask-vault-pass
 
 deploy: ## Развернуть приложение на сервере
 	cd $(ANSIBLE_DIR) && ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DEPLOY) --ask-vault-pass
@@ -91,7 +95,5 @@ check-nginx: ## Проверить stub_status и nginx-exporter
 	curl -s http://$(APP_HOST):9113/metrics | grep -E "nginx_(up|connections|http_requests)" | head -15
 
 check-logs: ## End-to-end: записать тест-лог, проверить Loki (см. README)
-	@echo "Запись тестового лога на app-сервер..."
-	@echo "Выполните вручную:"
-	@echo "  ssh ... yc-user@$(APP_HOST) \"echo '{\\\"time\\\":\\\"\$$(date -Iseconds)\\\",\\\"status\\\":999,\\\"uri\\\":\\\"/test-e2e\\\",\\\"method\\\":\\\"GET\\\"}' >> /var/log/nginx/app-access.log\""
+	@echo "Запись тестового лога — логи в Docker volume, использовать docker exec (см. README)"
 	@echo "Через 30 сек проверьте в Grafana: Explore -> Loki -> {job=\"nginx\"} | json | uri=\"/test-e2e\""

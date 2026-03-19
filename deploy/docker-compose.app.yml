@@ -1,0 +1,106 @@
+services:
+  app:
+    image: ruslangilyazov/project-devops-deploy:latest
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      STORAGE_S3_BUCKET: ${S3_BUCKET:-}
+      STORAGE_S3_REGION: ${S3_REGION:-}
+      STORAGE_S3_ENDPOINT: ${S3_ENDPOINT:-}
+      STORAGE_S3_ACCESSKEY: ${S3_ACCESS_KEY:-}
+      STORAGE_S3_SECRETKEY: ${S3_SECRET_KEY:-}
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9090/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./configs/nginx:/etc/nginx/conf.d:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - app-net
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    pid: host
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.systemd'
+      - '--collector.processes'
+    networks:
+      - app-net
+
+  nginx-prometheus-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    restart: unless-stopped
+    ports:
+      - "9113:9113"
+    command:
+      - '-nginx.scrape-uri=http://nginx:80/stub_status'
+    depends_on:
+      - nginx
+    networks:
+      - app-net
+
+  promtail:
+    image: grafana/promtail:3.6.7
+    restart: unless-stopped
+    volumes:
+      - ./configs/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - nginx_logs:/var/log/nginx:ro
+    command: -config.file=/etc/promtail/promtail.yml
+    networks:
+      - app-net
+
+volumes:
+  postgres_data:
+  nginx_logs:
+
+networks:
+  app-net:
+    driver: bridge

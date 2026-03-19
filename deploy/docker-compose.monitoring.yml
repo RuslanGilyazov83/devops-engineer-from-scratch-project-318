@@ -1,0 +1,59 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    networks:
+      - monitoring-net
+
+  loki:
+    image: grafana/loki:3.6.7
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./configs/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/loki-config.yml
+    networks:
+      - monitoring-net
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      GF_SERVER_HTTP_ADDR: "0.0.0.0"
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/etc/grafana/dashboards/system-resources.json"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - monitoring-net
+
+volumes:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+
+networks:
+  monitoring-net:
+    driver: bridge
