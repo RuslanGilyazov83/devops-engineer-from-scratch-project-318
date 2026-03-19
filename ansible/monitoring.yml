@@ -8,6 +8,6 @@
     - role: docker
     - role: deploy_compose
       vars:
-        deploy_target_dir: /opt/monitoring
-        deploy_compose_file: docker-compose.monitoring.yml
-        deploy_project_name: monitoring
+        deploy_compose_deploy_target_dir: /opt/monitoring
+        deploy_compose_deploy_compose_file: docker-compose.monitoring.yml
+        deploy_compose_deploy_project_name: monitoring

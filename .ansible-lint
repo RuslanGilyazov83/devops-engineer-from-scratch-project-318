@@ -4,6 +4,7 @@
 # Exclude paths
 exclude_paths:
   - .cache/
+  - ansible/roles/archive/
 
 # Skip specific rules (uncomment if needed)
 # skip_list:

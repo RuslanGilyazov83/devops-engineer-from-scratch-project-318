@@ -10,7 +10,7 @@
     - nginx-prometheus-exporter
     - promtail
   failed_when: false
-  when: deploy_compose_file == 'docker-compose.app.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.app.yml'
 
 - name: Остановить Nginx если был установлен через apt
   ansible.builtin.systemd:
@@ -18,7 +18,7 @@
     state: stopped
     enabled: false
   failed_when: false
-  when: deploy_compose_file == 'docker-compose.app.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.app.yml'
 
 # Остановить старые systemd-сервисы мониторинга (могут отсутствовать — не ошибка)
 - name: Остановить старые сервисы (monitoring)
@@ -31,7 +31,7 @@
     - prometheus
     - grafana
   failed_when: false
-  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.monitoring.yml'
 
 # Остановить старые standalone-контейнеры (archive-roles: docker run grafana/prometheus/loki)
 - name: Остановить и удалить старые контейнеры мониторинга
@@ -42,8 +42,8 @@
     - grafana
     - prometheus
     - loki
-  ignore_errors: true
-  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+  failed_when: false
+  when: deploy_compose_deploy_compose_file == 'docker-compose.monitoring.yml'
 
 - name: Установить и настроить ufw (app)
   community.general.ufw:
@@ -74,60 +74,62 @@
 
 - name: Ensure deploy target directory exists
   ansible.builtin.file:
-    path: "{{ deploy_target_dir }}"
+    path: "{{ deploy_compose_deploy_target_dir }}"
     state: directory
     mode: '0755'
 
 - name: Copy deploy directory to target
   ansible.builtin.copy:
-    src: "{{ deploy_src }}/"
-    dest: "{{ deploy_target_dir }}/"
+    src: "{{ deploy_compose_deploy_src }}/"
+    dest: "{{ deploy_compose_deploy_target_dir }}/"
+    mode: '0644'
+    directory_mode: '0755'
 
 - name: Template nginx app config (app only)
   ansible.builtin.template:
-    src: "{{ deploy_src }}/configs/nginx/app.conf.j2"
-    dest: "{{ deploy_target_dir }}/configs/nginx/app.conf"
+    src: "{{ deploy_compose_deploy_src }}/configs/nginx/app.conf.j2"
+    dest: "{{ deploy_compose_deploy_target_dir }}/configs/nginx/app.conf"
     mode: '0644'
-  when: deploy_compose_file == 'docker-compose.app.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.app.yml'
 
 - name: Template promtail config (app only)
   ansible.builtin.template:
-    src: "{{ deploy_src }}/configs/promtail.yml.j2"
-    dest: "{{ deploy_target_dir }}/configs/promtail.yml"
+    src: "{{ deploy_compose_deploy_src }}/configs/promtail.yml.j2"
+    dest: "{{ deploy_compose_deploy_target_dir }}/configs/promtail.yml"
     mode: '0644'
-  when: deploy_compose_file == 'docker-compose.app.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.app.yml'
 
 - name: Template prometheus config (monitoring only)
   ansible.builtin.template:
-    src: "{{ deploy_src }}/configs/prometheus.yml.j2"
-    dest: "{{ deploy_target_dir }}/configs/prometheus.yml"
+    src: "{{ deploy_compose_deploy_src }}/configs/prometheus.yml.j2"
+    dest: "{{ deploy_compose_deploy_target_dir }}/configs/prometheus.yml"
     mode: '0644'
-  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.monitoring.yml'
 
 - name: Template Grafana contact-points (monitoring only)
   ansible.builtin.template:
-    src: "{{ deploy_src }}/configs/grafana/provisioning/alerting/contact-points.yml.j2"
-    dest: "{{ deploy_target_dir }}/configs/grafana/provisioning/alerting/contact-points.yml"
+    src: "{{ deploy_compose_deploy_src }}/configs/grafana/provisioning/alerting/contact-points.yml.j2"
+    dest: "{{ deploy_compose_deploy_target_dir }}/configs/grafana/provisioning/alerting/contact-points.yml"
     owner: "472"
     group: "472"
     mode: "0644"
-  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.monitoring.yml'
 
 - name: Create Grafana provisioning/plugins directory (required by Grafana)
   ansible.builtin.file:
-    path: "{{ deploy_target_dir }}/configs/grafana/provisioning/plugins"
+    path: "{{ deploy_compose_deploy_target_dir }}/configs/grafana/provisioning/plugins"
     state: directory
     mode: "0755"
-  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.monitoring.yml'
 
 - name: Fix Grafana config ownership (Grafana runs as UID 472)
   ansible.builtin.file:
-    path: "{{ deploy_target_dir }}/configs/grafana"
+    path: "{{ deploy_compose_deploy_target_dir }}/configs/grafana"
     state: directory
     recurse: true
     owner: "472"
     group: "472"
-  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.monitoring.yml'
 
 - name: Create .env file for app stack
   ansible.builtin.copy:
@@ -140,28 +142,28 @@
       S3_ENDPOINT={{ s3_endpoint | default('') }}
       S3_ACCESS_KEY={{ s3_access_key | default('') }}
       S3_SECRET_KEY={{ s3_secret_key | default('') }}
-    dest: "{{ deploy_target_dir }}/.env"
+    dest: "{{ deploy_compose_deploy_target_dir }}/.env"
     mode: '0600'
     force: true
-  when: deploy_compose_file == 'docker-compose.app.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.app.yml'
 
 - name: Create .env file for monitoring stack
   ansible.builtin.copy:
     content: |
       GRAFANA_ADMIN_USER={{ grafana_admin_user | default('admin') }}
       GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
-    dest: "{{ deploy_target_dir }}/.env"
+    dest: "{{ deploy_compose_deploy_target_dir }}/.env"
     mode: '0600'
     force: true
-  when: deploy_compose_file == 'docker-compose.monitoring.yml'
+  when: deploy_compose_deploy_compose_file == 'docker-compose.monitoring.yml'
 
 - name: Run docker compose up
   community.docker.docker_compose_v2:
-    project_src: "{{ deploy_target_dir }}"
-    project_name: "{{ deploy_project_name | default('stack') }}"
+    project_src: "{{ deploy_compose_deploy_target_dir }}"
+    project_name: "{{ deploy_compose_deploy_project_name }}"
     files:
-      - "{{ deploy_target_dir }}/{{ deploy_compose_file }}"
+      - "{{ deploy_compose_deploy_target_dir }}/{{ deploy_compose_file }}"
     env_files:
-      - "{{ deploy_target_dir }}/.env"
+      - "{{ deploy_compose_deploy_target_dir }}/.env"
     state: present
-  register: compose_result
+  register: deploy_compose_compose_result
