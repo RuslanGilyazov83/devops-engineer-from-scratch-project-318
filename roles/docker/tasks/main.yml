@@ -1,0 +1,3 @@
+---
+- name: Delegate to ansible role docker tasks
+  ansible.builtin.include_tasks: "../../../ansible/roles/docker/tasks/main.yml"
