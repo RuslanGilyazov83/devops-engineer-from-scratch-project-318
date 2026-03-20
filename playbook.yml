@@ -1,0 +1,4 @@
+---
+# Точка входа для Hexlet project-action
+# Основные плейбуки: ansible/playbooks/setup.yml, deploy.yml, monitoring.yml
+- import_playbook: ansible/playbooks/setup.yml
