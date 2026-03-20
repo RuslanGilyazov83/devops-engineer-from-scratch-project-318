@@ -34,18 +34,27 @@
     mode: '0644'
     force: true
 
-- name: Получить архитектуру системы
-  ansible.builtin.command: dpkg --print-architecture
-  register: docker_dpkg_arch
-  changed_when: false
+- name: Определить архитектуру для Docker APT repo
+  ansible.builtin.set_fact:
+    docker_apt_arch: >-
+      {{ 'amd64' if ansible_architecture in ['x86_64', 'amd64']
+      else 'arm64' if ansible_architecture in ['aarch64', 'arm64']
+      else 'armhf' if ansible_architecture in ['armv7l', 'armhf']
+      else 'ppc64el' if ansible_architecture == 'ppc64le'
+      else 's390x' if ansible_architecture == 's390x'
+      else 'amd64' }}
 
 - name: Подключить репозиторий Docker
   ansible.builtin.apt_repository:
     repo: >-
-      deb [arch={{ docker_dpkg_arch.stdout }} signed-by=/etc/apt/keyrings/docker.asc]
+      deb [arch={{ docker_apt_arch }} signed-by=/etc/apt/keyrings/docker.asc]
       https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
     state: present
     filename: docker
+
+- name: Обновить кэш apt после добавления репозитория Docker
+  ansible.builtin.apt:
+    update_cache: true
 
 - name: Установить Docker и плагины
   ansible.builtin.apt:
@@ -56,16 +65,18 @@
       - docker-buildx-plugin
       - docker-compose-plugin
     state: present
-    update_cache: true
+  when: not ansible_check_mode
 
 - name: Убедиться что Docker запущен и включён в автозапуск
   ansible.builtin.systemd:
     name: docker
     state: started
     enabled: true
+  when: not ansible_check_mode
 
 - name: Добавить пользователя в группу docker
   ansible.builtin.user:
     name: "{{ ansible_user }}"
     groups: docker
     append: true
+  when: not ansible_check_mode
