@@ -49,8 +49,8 @@ http://158.160.223.121
 
 ### Метрики хоста (Node Exporter, порт 9100)
 
-Node Exporter работает как systemd-сервис, слушает только на localhost:9100.
-Доступ открывается только с сервера мониторинга (Security Group).
+Node Exporter работает как Docker-контейнер (docker-compose.app.yml), слушает на порту 9100.
+Доступ открывается только с сервера мониторинга (UFW / Security Group).
 
 | Метрика | Описание |
 |---------|----------|
@@ -248,10 +248,15 @@ http://93.77.187.78:3000
 
 ### Как триггернуть тестовый алерт вручную
 
-**Через UI (рекомендуется):**
+**Через Contact points (проще всего):**
+1. Grafana → Alerting → Contact points
+2. Выберите канал (например, Telegram)
+3. Нажмите **Test** / **Send test notification**
+
+**Через Alert rules:**
 1. Grafana → Alerting → Alert rules
 2. Выберите правило (например, «Сервис недоступен» или «Всплеск 5xx в логах Nginx»)
-3. Нажмите «⋯» → **Send test alert**
+3. Откройте правило → «⋯» → **Send test alert**
 
 **Через API (для автоматизации):**
 ```bash
@@ -319,18 +324,9 @@ curl -s 'http://93.77.187.78:9090/api/v1/query?query=up' | python3 -m json.tool
 | 3000 | monitoring | Grafana | Публично |
 | 3100 | monitoring | Loki | Только app-сервер (158.160.223.121) |
 
-## Быстрый старт (локально)
+## Быстрый старт
 
-```bash
-# Запустить с профилем dev (H2 in-memory БД, без PostgreSQL)
-make run
-
-# Или в Docker
-make docker-build
-make docker-run
-```
-
-Приложение доступно на `http://localhost:8080`, Actuator на `http://localhost:9090`.
+Репозиторий содержит только конфигурации деплоя и мониторинга. Исходный код приложения — в [hexlet-components/project-devops-deploy](https://github.com/hexlet-components/project-devops-deploy).
 
 ## Инфраструктура (Yandex Cloud)
 
@@ -347,7 +343,7 @@ make docker-run
 ruslangilyazov/project-devops-deploy:latest
 ```
 
-Собирается автоматически при push в `main` через GitHub Actions.
+Образ публикуется из репозитория приложения [hexlet-components/project-devops-deploy](https://github.com/hexlet-components/project-devops-deploy) или из вашего форка.
 
 ## Docker Compose
 
@@ -381,14 +377,16 @@ Ansible роль `deploy_compose` копирует каталог `deploy/` в `
 │   │   └── monitoring/
 │   ├── inventory/
 │   │   └── hosts.yml
+│   ├── playbooks/
+│   │   ├── setup.yml
+│   │   ├── deploy.yml
+│   │   └── monitoring.yml
 │   ├── roles/
 │   │   ├── docker/      (установка Docker)
 │   │   ├── deploy_compose/  (копирование deploy/, docker compose up)
 │   │   └── archive/    (старые роли app, db_postgres, nginx_*, и др.)
 │   ├── requirements.yml
-│   ├── setup.yml        (Docker на все серверы)
-│   ├── deploy.yml       (app-сервер: docker + deploy_compose)
-│   └── monitoring.yml   (monitoring: docker + deploy_compose)
+│   └── ansible.cfg
 ├── assets/
 ├── Makefile
 └── README.md
@@ -396,11 +394,13 @@ Ansible роль `deploy_compose` копирует каталог `deploy/` в `
 
 ## Ansible-плейбуки
 
+Плейбуки запускаются из `ansible/playbooks/`:
+
 | Файл / Директория | Назначение |
 |-------------------|------------|
-| `ansible/setup.yml` | Установка Docker (все серверы) |
-| `ansible/deploy.yml` | Запуск сервисов на app-сервере (БД, приложение, Node Exporter, Nginx) |
-| `ansible/monitoring.yml` | Запуск Prometheus, Loki, Grafana на сервере мониторинга |
+| `ansible/playbooks/setup.yml` | Установка Docker (все серверы) |
+| `ansible/playbooks/deploy.yml` | Запуск сервисов на app-сервере (БД, приложение, Node Exporter, Nginx) |
+| `ansible/playbooks/monitoring.yml` | Prometheus, Loki, Grafana на сервере мониторинга |
 | `ansible/inventory/hosts.yml` | Список серверов (группы `app` и `monitoring`) |
 | `ansible/group_vars/all/vars.yml` | Общие переменные (таргеты Prometheus, версии) |
 | `ansible/group_vars/all/vault.yml` | Секретные переменные (зашифрованы) |
@@ -417,19 +417,13 @@ Ansible роль `deploy_compose` копирует каталог `deploy/` в `
 ```bash
 make help          # Показать все команды
 
-make build         # Собрать JAR
-make test          # Прогнать тесты
-make run           # Запустить локально (dev профиль)
-
-make docker-build  # Собрать Docker-образ локально
-make docker-run    # Запустить образ локально
-
 make ansible-deps       # Установить зависимости Ansible
 make setup              # Установить Docker (все серверы)
 make deploy             # Развернуть приложение + Promtail (app-сервер)
 make monitoring-setup   # Развернуть Prometheus, Loki, Grafana (сервер мониторинга)
 
 make lint          # ansible-lint: проверить плейбуки
+make test          # Smoke Ansible: ping всех хостов (make ansible-test)
 make ansible-test  # Smoke: ping всех хостов
 make smoke         # Smoke: curl к приложению, Prometheus, Grafana
 ```
@@ -463,6 +457,10 @@ ssh-keygen -t ed25519 -C "your-email@example.com" -f ~/.ssh/id_ed25519 -N ""
 ```bash
 git clone https://github.com/<your-username>/devops-engineer-from-scratch-project-318.git
 cd devops-engineer-from-scratch-project-318
+
+# Важно: ansible.cfg должен загружаться (иначе Ansible не найдёт roles)
+# Если каталог ansible world-writable — Ansible игнорирует ansible.cfg
+chmod 755 ansible
 ```
 
 ### 4. Переменные Vault
@@ -579,6 +577,9 @@ make smoke
 ## Деплой на сервер (кратко)
 
 ```bash
+# 0. Убедиться, что ansible.cfg загружается (chmod 755 ansible)
+chmod 755 ansible
+
 # 1. Установить зависимости Ansible
 make ansible-deps
 

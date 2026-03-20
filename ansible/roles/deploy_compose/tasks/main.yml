@@ -55,7 +55,7 @@
     - { port: "9100", src: "{{ monitoring_server_ip }}" }
     - { port: "9113", src: "{{ monitoring_server_ip }}" }
   when:
-    - deploy_compose_file == 'docker-compose.app.yml'
+    - deploy_compose_deploy_compose_file == 'docker-compose.app.yml'
     - monitoring_server_ip is defined
 
 - name: Установить и настроить ufw (monitoring)
@@ -69,7 +69,7 @@
     - { port: "3000", src: "0.0.0.0/0" }
     - { port: "9090", src: "0.0.0.0/0" }
   when:
-    - deploy_compose_file == 'docker-compose.monitoring.yml'
+    - deploy_compose_deploy_compose_file == 'docker-compose.monitoring.yml'
     - app_server_host is defined
 
 - name: Ensure deploy target directory exists
@@ -162,7 +162,7 @@
     project_src: "{{ deploy_compose_deploy_target_dir }}"
     project_name: "{{ deploy_compose_deploy_project_name }}"
     files:
-      - "{{ deploy_compose_deploy_target_dir }}/{{ deploy_compose_file }}"
+      - "{{ deploy_compose_deploy_target_dir }}/{{ deploy_compose_deploy_compose_file }}"
     env_files:
       - "{{ deploy_compose_deploy_target_dir }}/.env"
     state: present

@@ -1,9 +1,9 @@
-# Assets для проверки проекта
+# Assets для проверки проекта (задание 8)
 
-Сюда можно поместить скриншоты и скринкасты для ревью:
+Скриншоты для ревью (если требуется проверкой):
 
-- `grafana-dashboard-*.png` — дашборды Grafana (Status Page, Logs, Nginx и т.д.)
-- `loki-explore-*.png` — примеры запросов Loki в Explore
-- `alerting-*.png` — алертинг, Contact points, отправка тестового алерта
+- Дашборды Grafana: Status Page, Logs, Nginx, System Resources, Spring App
+- Loki Explore: запрос `{job="nginx"}`
+- Алертинг: Contact points, тестовый алерт в Telegram
 
-Необязательно: проверяющий может ориентироваться по README и описать результат в отчёте.
+Скриншоты можно разместить в `assets/` (корень проекта) или скопировать сюда.

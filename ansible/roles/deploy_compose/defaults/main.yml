@@ -1,5 +1,6 @@
 ---
-deploy_compose_deploy_src: "{{ playbook_dir }}/../deploy"
+# playbook_dir = ansible/playbooks → ../../deploy = project_root/deploy
+deploy_compose_deploy_src: "{{ playbook_dir }}/../../deploy"
 deploy_compose_deploy_target_dir: /opt/app
 deploy_compose_deploy_compose_file: docker-compose.app.yml
 deploy_compose_deploy_project_name: stack
